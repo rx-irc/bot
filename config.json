@@ -1,0 +1,58 @@
+{
+  "client": {
+    "server": "95.128.34.190",
+    "port": 6697,
+    "secure": true,
+    "logLevel": "debug",
+
+    "nick": "rxbot",
+    "channels": [
+      "#rxbot"
+    ]
+  },
+
+  "modules": [
+    {
+      "name": "admin",
+      "enabled": true,
+      "options": {
+        "regexp": "^fkm!~?fkm@"
+      }
+    },
+    {
+      "name": "fun",
+      "enabled": true,
+      "options": {}
+    },
+    {
+      "name": "quiz",
+      "enabled": false,
+      "options": {
+        "channel": "#quiz",
+        "startDelay": 10000,
+        "questionDelay": 10000,
+        "hintInterval": 10000,
+        "moderated": true
+      }
+    },
+    {
+      "name": "1337",
+      "enabled": false,
+      "options": {
+        "channel": "#rxbot"
+      }
+    },
+    {
+      "name": "aare",
+      "enabled": false,
+      "options": {}
+    },
+    {
+      "name": "lastfm",
+      "enabled": false,
+      "options": {
+        "apiKey": "secret"
+      }
+    }
+  ]
+}

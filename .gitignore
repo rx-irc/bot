@@ -1,0 +1,10 @@
+# System
+.directory
+.DS_Store
+Thumbs.db
+
+# Node
+/node_modules/
+
+# Project
+/docs/

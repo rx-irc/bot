@@ -1,0 +1,8 @@
+# Security
+.git
+
+# Size
+node_modules
+_next
+doc
+docs
