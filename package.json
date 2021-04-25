@@ -1,7 +1,7 @@
 {
   "name": "@rx-irc/bot",
   "description": "A Node.js IRC bot framework based on RxJS streams.",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "license": "MIT",
   "author": "Florian Mäder <florian@maederbiel.ch>",
   "homepage": "https://fkm.github.io/rx-irc-bot/",
