@@ -2,6 +2,7 @@
 const assert = require('assert');
 const irc = require('irc');
 const { fromEvent } = require('rxjs');
+const { takeUntil } = require('rxjs/operators');
 const { createLogger, format, transports } = require('winston');
 
 /** @external {Client} https://www.npmjs.com/package/irc */
@@ -63,7 +64,9 @@ class ClientWrapper {
 			this.settings
 		);
 
-		this.raw$ = fromEvent(this.lib, 'raw');
+		this.raw$ = fromEvent(this.lib, 'raw').pipe(
+			takeUntil(fromEvent(this.lib, 'quit'))
+		);
 
 		this.logger = createLogger({
 			level: this.settings.logLevel || 'info',
