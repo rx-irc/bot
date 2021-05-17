@@ -3,7 +3,9 @@ const assert = require('assert');
 const irc = require('irc');
 const { fromEvent } = require('rxjs');
 const { takeUntil } = require('rxjs/operators');
-const { createLogger, format, transports } = require('winston');
+
+// Local Dependencies
+const logger = require('./logger');
 
 /** @external {Client} https://www.npmjs.com/package/irc */
 
@@ -30,6 +32,7 @@ const { createLogger, format, transports } = require('winston');
  * @property {string} defaults.channelPrefixes='&amp;#'
  * @property {number} defaults.messageSplit=512
  * @property {string} defaults.encoding='UTF-8'
+ * @property {string} defaults.logLevel='info'
  */
 let defaults = {
 	userName: 'rxbot',
@@ -68,29 +71,10 @@ class ClientWrapper {
 			takeUntil(fromEvent(this.lib, 'quit'))
 		);
 
-		this.logger = createLogger({
-			level: this.settings.logLevel || 'info',
-			format: process.stdout.isTTY ?
-				format.combine(
-					format.colorize(),
-					format.timestamp(),
-					format.align(),
-					format.printf(info => `${info.timestamp} ${info.level} ${info.message}`)
-				) :
-				format.combine(
-					format.timestamp(),
-					format.printf(info => `${info.timestamp} ${info.level.toUpperCase()} ${info.message}`)
-				),
-			transports: [
-				new transports.Console()
-			],
-			exitOnError: false,
-		});
-
-		this.lib.on('error', error => this.logger.error(error));
+		this.lib.on('error', error => logger.error(error));
 
 		this.raw$.subscribe(message => {
-			this.logger.silly(JSON.stringify(message, null, 2));
+			logger.debug(JSON.stringify(message, null, 2));
 		});
 	}
 
