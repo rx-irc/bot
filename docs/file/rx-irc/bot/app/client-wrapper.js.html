@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <base data-ice="baseUrl" href="../../../../">
+  <title data-ice="title">rx-irc/bot/app/client-wrapper.js | @rx-irc/bot</title>
+  <link type="text/css" rel="stylesheet" href="css/style.css">
+  <link type="text/css" rel="stylesheet" href="css/prettify-tomorrow.css">
+  <script src="script/prettify/prettify.js"></script>
+  <script src="script/manual.js"></script>
+<meta name="description" content="A Node.js IRC bot framework based on RxJS streams."><meta property="twitter:card" content="summary"><meta property="twitter:title" content="@rx-irc/bot"><meta property="twitter:description" content="A Node.js IRC bot framework based on RxJS streams."></head>
+<body class="layout-container" data-ice="rootContainer">
+
+<header>
+  <a href="./" style="display: flex; align-items: center;"><img src="./image/brand_logo.png" style="width: 20px; height: 20px;"></a>
+  
+  <a href="identifiers.html">Reference</a>
+  <a href="source.html">Source</a>
+  
+  <div class="search-box">
+  <span>
+    <img src="./image/search.png">
+    <span class="search-input-edge"></span><input class="search-input"><span class="search-input-edge"></span>
+  </span>
+    <ul class="search-result"></ul>
+  </div>
+<a style="position:relative; top:3px;" href="https://github.com/rx-irc/bot"><img width="20px" src="./image/github.png"></a></header>
+
+<nav class="navigation" data-ice="nav"><div>
+  <ul>
+    
+  <li data-ice="doc"><a data-ice="dirPath" class="nav-dir-path" href="identifiers.html#bot-1337-lib">bot-1337/lib</a><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/rx-irc/bot-1337/lib/module.js~LeetModule.html">LeetModule</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-defaults">defaults</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-interval">interval</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-version">version</a></span></span></li>
+<li data-ice="doc"><a data-ice="dirPath" class="nav-dir-path" href="identifiers.html#bot-aare-lib">bot-aare/lib</a><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/rx-irc/bot-aare/lib/module.js~AareModule.html">AareModule</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-AARE_API_URL">AARE_API_URL</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-AARE_ORIGIN_URL">AARE_ORIGIN_URL</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-AARE_RIVER_NAME">AARE_RIVER_NAME</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-defaults">defaults</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-filter">filter</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-version">version</a></span></span></li>
+<li data-ice="doc"><a data-ice="dirPath" class="nav-dir-path" href="identifiers.html#bot-admin-lib">bot-admin/lib</a><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/rx-irc/bot-admin/lib/module.js~AdminModule.html">AdminModule</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-REGEXP_JOIN">REGEXP_JOIN</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-REGEXP_KICK">REGEXP_KICK</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-REGEXP_MODE">REGEXP_MODE</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-REGEXP_NICK">REGEXP_NICK</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-REGEXP_PART">REGEXP_PART</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-REGEXP_PRIVS">REGEXP_PRIVS</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-REGEXP_TALK">REGEXP_TALK</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-REGEXP_TOPIC">REGEXP_TOPIC</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-defaults">defaults</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-filter">filter</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-version">version</a></span></span></li>
+<li data-ice="doc"><a data-ice="dirPath" class="nav-dir-path" href="identifiers.html#bot-fun-lib">bot-fun/lib</a><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/rx-irc/bot-fun/lib/module.js~FunModule.html">FunModule</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-defaults">defaults</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-filter">filter</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-spawn">spawn</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-version">version</a></span></span></li>
+<li data-ice="doc"><a data-ice="dirPath" class="nav-dir-path" href="identifiers.html#bot-quiz-lib">bot-quiz/lib</a><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/rx-irc/bot-quiz/lib/module.js~QuizModule.html">QuizModule</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/rx-irc/bot-quiz/lib/quiz-game.js~QuizGame.html">QuizGame</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/rx-irc/bot-quiz/lib/quiz-help.js~QuizHelp.html">QuizHelp</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers.html">QuizPlayers</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/rx-irc/bot-quiz/lib/quiz-question.js~QuizQuestion.html">QuizQuestion</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/rx-irc/bot-quiz/lib/quiz-questions.js~QuizQuestions.html">QuizQuestions</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-function">F</span><span data-ice="name"><span><a href="function/index.html#static-function-convertQuestions">convertQuestions</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-function">F</span><span data-ice="name"><span><a href="function/index.html#static-function-readFile">readFile</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-function">F</span><span data-ice="name"><span><a href="function/index.html#static-function-getQuestions">getQuestions</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-HEADING_END">HEADING_END</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-defaults">defaults</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-filter">filter</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-merge">merge</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-version">version</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-defaults">defaults</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-defaults">defaults</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-knuthShuffle">knuthShuffle</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-knuthShuffle">knuthShuffle</a></span></span></li>
+<li data-ice="doc"><a data-ice="dirPath" class="nav-dir-path" href="identifiers.html#bot-app">bot/app</a><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/rx-irc/bot/app/client-wrapper.js~ClientWrapper.html">ClientWrapper</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-defaults">defaults</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-fromEvent">fromEvent</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-takeUntil">takeUntil</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-client">client</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-external">E</span><span data-ice="name"><span><a href="https://www.npmjs.com/package/irc">Client</a></span></span></li>
+</ul>
+</div>
+</nav>
+
+<div class="content" data-ice="content"><h1 data-ice="title">rx-irc/bot/app/client-wrapper.js</h1>
+<pre class="source-code line-number raw-source-code"><code class="prettyprint linenums" data-ice="content">// NPM Dependencies
+const assert = require(&apos;assert&apos;);
+const irc = require(&apos;irc&apos;);
+const { fromEvent } = require(&apos;rxjs&apos;);
+const { takeUntil } = require(&apos;rxjs/operators&apos;);
+
+// Local Dependencies
+const logger = require(&apos;./logger&apos;);
+
+/** @external {Client} https://www.npmjs.com/package/irc */
+
+/**
+ * @see https://node-irc.readthedocs.io/en/latest/API.html#client
+ *
+ * @type {Object}
+ * @property {string} userName=&apos;rxbot&apos;
+ * @property {string} realName=&apos;ReactiveX&amp;nbsp;IRC&amp;nbsp;bot&apos;
+ * @property {string} localAddress=null
+ * @property {boolean} debug=false
+ * @property {boolean} showErrors=true
+ * @property {boolean} autoRejoin=false
+ * @property {boolean} autoConnect=false
+ * @property {boolean} secure=true
+ * @property {boolean} selfSigned=true
+ * @property {boolean} certExpired=true
+ * @property {boolean} floodProtection=false
+ * @property {number} floodProtectionDelay=1000
+ * @property {boolean} sasl=false
+ * @property {number} retryCount=0
+ * @property {number} retryDelay=2000
+ * @property {boolean} stripColors=true
+ * @property {string} channelPrefixes=&apos;&amp;amp;#&apos;
+ * @property {number} messageSplit=512
+ * @property {string} encoding=&apos;UTF-8&apos;
+ */
+let defaults = {
+	userName: &apos;rxbot&apos;,
+	realName: &apos;ReactiveX IRC bot&apos;,
+	localAddress: null,
+	debug: false,
+	showErrors: true,
+	autoRejoin: false,
+	autoConnect: false,
+	secure: true,
+	selfSigned: true,
+	certExpired: true,
+	floodProtection: false,
+	floodProtectionDelay: 1000,
+	sasl: false,
+	retryCount: 0,
+	retryDelay: 2000,
+	stripColors: true,
+	channelPrefixes: &quot;&amp;#&quot;,
+	messageSplit: 512,
+	encoding: &apos;UTF-8&apos;,
+};
+
+class ClientWrapper {
+	constructor(options) {
+		/** @type {object} */
+		this.settings = { ...defaults, ...options };
+
+		this.lib = new irc.Client(
+			this.settings.server,
+			this.settings.nick,
+			this.settings
+		);
+
+		this.raw$ = fromEvent(this.lib, &apos;raw&apos;).pipe(
+			takeUntil(fromEvent(this.lib, &apos;quit&apos;))
+		);
+
+		this.lib.on(&apos;error&apos;, error =&gt; logger.error(error));
+
+		this.raw$.subscribe(message =&gt; {
+			logger.debug(JSON.stringify(message, null, 2));
+		});
+	}
+
+	connect(callback) {
+		this.lib.connect(callback);
+	}
+
+	disconnect(reason, callback) {
+		this.lib.disconnect(reason, callback);
+	}
+
+	join(channels) {
+		if (typeof channels === &apos;string&apos;) {
+			channels = channels.split(&apos; &apos;);
+		}
+		assert(channels instanceof Array);
+
+		channels.forEach(channel =&gt; this.lib.join(channel));
+	}
+
+	part(channels, message) {
+		if (typeof channels === &apos;string&apos;) {
+			channels = channels.split(&apos; &apos;);
+		}
+		assert(channels instanceof Array);
+
+		channels.forEach(channel =&gt; this.lib.part(channel, message));
+	}
+
+	kick(channel, nicks, reason) {
+		if (typeof nicks === &apos;string&apos;) {
+			nicks = nicks.split(&apos; &apos;);
+		}
+		assert(nicks instanceof Array);
+
+		nicks.forEach(nick =&gt; {
+			let command = [&apos;KICK&apos;, channel, nick];
+
+			if (reason) {
+				command.push(reason);
+			}
+
+			this.lib.send.apply(this.lib, command);
+		});
+	}
+
+	getNick() {
+		return this.lib.nick;
+	}
+
+	setNick(nick) {
+		this.lib.send(&apos;NICK&apos;, nick);
+	}
+
+	getTopic(channel) {
+		let topic;
+		let data = this.lib.chanData(channel);
+
+		if (data &amp;&amp; data.topic) {
+			topic = data.topic;
+
+			if (data.topicBy) {
+				topic += ` set by ${data.topicBy}`;
+			}
+		}
+
+		return topic;
+	}
+
+	setTopic(channel, message) {
+		this.lib.send(&apos;TOPIC&apos;, channel, message);
+	}
+
+	sendMessage(type, target, lines, prefix) {
+		assert.strictEqual(typeof target, &apos;string&apos;);
+		assert.match(type, /PRIVMSG|NOTICE/i);
+
+		if (typeof lines === &apos;string&apos;) {
+			lines = lines.split(/[\r\n]+/);
+		} else if (Buffer.isBuffer(lines)) {
+			lines = lines.toString()
+				.split(/[\r\n]+/)
+				.filter(line =&gt; line.length);
+		}
+		assert(lines instanceof Array);
+
+		if (prefix !== undefined) {
+			lines = lines.map(line =&gt; `${prefix} ${line}`)
+		}
+
+		lines.forEach(line =&gt; this.lib.send(type, target, line));
+	}
+
+	setPrivileges(channel, action, privilege, nicks) {
+		assert.strictEqual(typeof channel, &apos;string&apos;);
+		assert.match(action, /\+|\-/);
+		assert.match(privilege, /v|h|o/i);
+
+		if (typeof nicks === &apos;string&apos;) {
+			nicks = nicks.split(&apos; &apos;);
+		}
+		assert(nicks instanceof Array);
+
+		let batch_size = 6;
+		let batch_count = Math.ceil(nicks.length / batch_size);
+
+		for (let i = 0; i &lt; batch_count; i++) {
+			let batch_offset = i * batch_size;
+			let batch_nicks = nicks.slice(batch_offset, batch_offset + batch_size);
+			let batch_mode = action + privilege.repeat(batch_nicks.length);
+			let batch_args = [&apos;MODE&apos;, channel, batch_mode].concat(batch_nicks);
+
+			this.lib.send.apply(this.lib, batch_args);
+		}
+	}
+
+	tell(target, message, prefix) {
+		this.sendMessage(&apos;PRIVMSG&apos;, target, message, prefix);
+	}
+
+	notify(target, message, prefix) {
+		this.sendMessage(&apos;NOTICE&apos;, target, message, prefix);
+	}
+
+	giveOps(channel, nicks) {
+		this.setPrivileges(channel, &apos;+&apos;, &apos;o&apos;, nicks);
+	}
+
+	takeOps(channel, nicks) {
+		this.setPrivileges(channel, &apos;-&apos;, &apos;o&apos;, nicks);
+	}
+
+	giveHops(channel, nicks) {
+		this.setPrivileges(channel, &apos;+&apos;, &apos;h&apos;, nicks);
+	}
+
+	takeHops(channel, nicks) {
+		this.setPrivileges(channel, &apos;-&apos;, &apos;h&apos;, nicks);
+	}
+
+	giveVoices(channel, nicks) {
+		this.setPrivileges(channel, &apos;+&apos;, &apos;v&apos;, nicks);
+	}
+
+	takeVoices(channel, nicks) {
+		this.setPrivileges(channel, &apos;-&apos;, &apos;v&apos;, nicks);
+	}
+}
+
+module.exports = ClientWrapper;
+</code></pre>
+
+</div>
+
+<footer class="footer">
+  Generated by <a href="https://esdoc.org">ESDoc<span data-ice="esdocVersion">(1.1.0)</span><img src="./image/esdoc-logo-mini-black.png"></a>
+</footer>
+
+<script src="script/search_index.js"></script>
+<script src="script/search.js"></script>
+<script src="script/pretty-print.js"></script>
+<script src="script/inherited-summary.js"></script>
+<script src="script/test-summary.js"></script>
+<script src="script/inner-link.js"></script>
+<script src="script/patch-for-local.js"></script>
+</body>
+</html>

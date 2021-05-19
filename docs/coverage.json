@@ -1,0 +1,151 @@
+{
+  "coverage": "56.77%",
+  "expectCount": 155,
+  "actualCount": 88,
+  "files": {
+    "rx-irc/bot/app/client-wrapper.js": {
+      "expectCount": 27,
+      "actualCount": 2,
+      "undocumentLines": [
+        5,
+        7,
+        60,
+        61,
+        65,
+        71,
+        82,
+        86,
+        90,
+        99,
+        108,
+        125,
+        129,
+        133,
+        148,
+        152,
+        172,
+        195,
+        199,
+        203,
+        207,
+        211,
+        215,
+        219,
+        223
+      ]
+    },
+    "rx-irc/bot/app/start.js": {
+      "expectCount": 1,
+      "actualCount": 0,
+      "undocumentLines": [
+        6
+      ]
+    },
+    "rx-irc/bot-1337/lib/module.js": {
+      "expectCount": 7,
+      "actualCount": 3,
+      "undocumentLines": [
+        4,
+        9,
+        11,
+        13
+      ]
+    },
+    "rx-irc/bot-aare/lib/module.js": {
+      "expectCount": 10,
+      "actualCount": 3,
+      "undocumentLines": [
+        4,
+        9,
+        11,
+        12,
+        13,
+        15,
+        17
+      ]
+    },
+    "rx-irc/bot-admin/lib/module.js": {
+      "expectCount": 15,
+      "actualCount": 11,
+      "undocumentLines": [
+        3,
+        8,
+        27,
+        31
+      ]
+    },
+    "rx-irc/bot-fun/lib/module.js": {
+      "expectCount": 8,
+      "actualCount": 3,
+      "undocumentLines": [
+        3,
+        5,
+        10,
+        12,
+        14
+      ]
+    },
+    "rx-irc/bot-quiz/lib/convert-questions.js": {
+      "expectCount": 2,
+      "actualCount": 2,
+      "undocumentLines": []
+    },
+    "rx-irc/bot-quiz/lib/module.js": {
+      "expectCount": 9,
+      "actualCount": 4,
+      "undocumentLines": [
+        3,
+        5,
+        11,
+        13,
+        15
+      ]
+    },
+    "rx-irc/bot-quiz/lib/quiz-game.js": {
+      "expectCount": 28,
+      "actualCount": 27,
+      "undocumentLines": [
+        31
+      ]
+    },
+    "rx-irc/bot-quiz/lib/quiz-help.js": {
+      "expectCount": 8,
+      "actualCount": 6,
+      "undocumentLines": [
+        21,
+        30
+      ]
+    },
+    "rx-irc/bot-quiz/lib/quiz-players.js": {
+      "expectCount": 17,
+      "actualCount": 16,
+      "undocumentLines": [
+        1
+      ]
+    },
+    "rx-irc/bot-quiz/lib/quiz-question.js": {
+      "expectCount": 12,
+      "actualCount": 7,
+      "undocumentLines": [
+        4,
+        6,
+        21,
+        22,
+        28
+      ]
+    },
+    "rx-irc/bot-quiz/lib/quiz-questions.js": {
+      "expectCount": 11,
+      "actualCount": 4,
+      "undocumentLines": [
+        4,
+        18,
+        23,
+        24,
+        25,
+        26,
+        27
+      ]
+    }
+  }
+}

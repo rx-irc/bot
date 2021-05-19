@@ -1,0 +1,4101 @@
+[
+  {
+    "__docId__": 0,
+    "kind": "file",
+    "name": "rx-irc/bot/app/client-wrapper.js",
+    "content": "// NPM Dependencies\nconst assert = require('assert');\nconst irc = require('irc');\nconst { fromEvent } = require('rxjs');\nconst { takeUntil } = require('rxjs/operators');\n\n// Local Dependencies\nconst logger = require('./logger');\n\n/** @external {Client} https://www.npmjs.com/package/irc */\n\n/**\n * @see https://node-irc.readthedocs.io/en/latest/API.html#client\n *\n * @type {Object}\n * @property {string} userName='rxbot'\n * @property {string} realName='ReactiveX&nbsp;IRC&nbsp;bot'\n * @property {string} localAddress=null\n * @property {boolean} debug=false\n * @property {boolean} showErrors=true\n * @property {boolean} autoRejoin=false\n * @property {boolean} autoConnect=false\n * @property {boolean} secure=true\n * @property {boolean} selfSigned=true\n * @property {boolean} certExpired=true\n * @property {boolean} floodProtection=false\n * @property {number} floodProtectionDelay=1000\n * @property {boolean} sasl=false\n * @property {number} retryCount=0\n * @property {number} retryDelay=2000\n * @property {boolean} stripColors=true\n * @property {string} channelPrefixes='&amp;#'\n * @property {number} messageSplit=512\n * @property {string} encoding='UTF-8'\n */\nlet defaults = {\n\tuserName: 'rxbot',\n\trealName: 'ReactiveX IRC bot',\n\tlocalAddress: null,\n\tdebug: false,\n\tshowErrors: true,\n\tautoRejoin: false,\n\tautoConnect: false,\n\tsecure: true,\n\tselfSigned: true,\n\tcertExpired: true,\n\tfloodProtection: false,\n\tfloodProtectionDelay: 1000,\n\tsasl: false,\n\tretryCount: 0,\n\tretryDelay: 2000,\n\tstripColors: true,\n\tchannelPrefixes: \"&#\",\n\tmessageSplit: 512,\n\tencoding: 'UTF-8',\n};\n\nclass ClientWrapper {\n\tconstructor(options) {\n\t\t/** @type {object} */\n\t\tthis.settings = { ...defaults, ...options };\n\n\t\tthis.lib = new irc.Client(\n\t\t\tthis.settings.server,\n\t\t\tthis.settings.nick,\n\t\t\tthis.settings\n\t\t);\n\n\t\tthis.raw$ = fromEvent(this.lib, 'raw').pipe(\n\t\t\ttakeUntil(fromEvent(this.lib, 'quit'))\n\t\t);\n\n\t\tthis.lib.on('error', error => logger.error(error));\n\n\t\tthis.raw$.subscribe(message => {\n\t\t\tlogger.debug(JSON.stringify(message, null, 2));\n\t\t});\n\t}\n\n\tconnect(callback) {\n\t\tthis.lib.connect(callback);\n\t}\n\n\tdisconnect(reason, callback) {\n\t\tthis.lib.disconnect(reason, callback);\n\t}\n\n\tjoin(channels) {\n\t\tif (typeof channels === 'string') {\n\t\t\tchannels = channels.split(' ');\n\t\t}\n\t\tassert(channels instanceof Array);\n\n\t\tchannels.forEach(channel => this.lib.join(channel));\n\t}\n\n\tpart(channels, message) {\n\t\tif (typeof channels === 'string') {\n\t\t\tchannels = channels.split(' ');\n\t\t}\n\t\tassert(channels instanceof Array);\n\n\t\tchannels.forEach(channel => this.lib.part(channel, message));\n\t}\n\n\tkick(channel, nicks, reason) {\n\t\tif (typeof nicks === 'string') {\n\t\t\tnicks = nicks.split(' ');\n\t\t}\n\t\tassert(nicks instanceof Array);\n\n\t\tnicks.forEach(nick => {\n\t\t\tlet command = ['KICK', channel, nick];\n\n\t\t\tif (reason) {\n\t\t\t\tcommand.push(reason);\n\t\t\t}\n\n\t\t\tthis.lib.send.apply(this.lib, command);\n\t\t});\n\t}\n\n\tgetNick() {\n\t\treturn this.lib.nick;\n\t}\n\n\tsetNick(nick) {\n\t\tthis.lib.send('NICK', nick);\n\t}\n\n\tgetTopic(channel) {\n\t\tlet topic;\n\t\tlet data = this.lib.chanData(channel);\n\n\t\tif (data && data.topic) {\n\t\t\ttopic = data.topic;\n\n\t\t\tif (data.topicBy) {\n\t\t\t\ttopic += ` set by ${data.topicBy}`;\n\t\t\t}\n\t\t}\n\n\t\treturn topic;\n\t}\n\n\tsetTopic(channel, message) {\n\t\tthis.lib.send('TOPIC', channel, message);\n\t}\n\n\tsendMessage(type, target, lines, prefix) {\n\t\tassert.strictEqual(typeof target, 'string');\n\t\tassert.match(type, /PRIVMSG|NOTICE/i);\n\n\t\tif (typeof lines === 'string') {\n\t\t\tlines = lines.split(/[\\r\\n]+/);\n\t\t} else if (Buffer.isBuffer(lines)) {\n\t\t\tlines = lines.toString()\n\t\t\t\t.split(/[\\r\\n]+/)\n\t\t\t\t.filter(line => line.length);\n\t\t}\n\t\tassert(lines instanceof Array);\n\n\t\tif (prefix !== undefined) {\n\t\t\tlines = lines.map(line => `${prefix} ${line}`)\n\t\t}\n\n\t\tlines.forEach(line => this.lib.send(type, target, line));\n\t}\n\n\tsetPrivileges(channel, action, privilege, nicks) {\n\t\tassert.strictEqual(typeof channel, 'string');\n\t\tassert.match(action, /\\+|\\-/);\n\t\tassert.match(privilege, /v|h|o/i);\n\n\t\tif (typeof nicks === 'string') {\n\t\t\tnicks = nicks.split(' ');\n\t\t}\n\t\tassert(nicks instanceof Array);\n\n\t\tlet batch_size = 6;\n\t\tlet batch_count = Math.ceil(nicks.length / batch_size);\n\n\t\tfor (let i = 0; i < batch_count; i++) {\n\t\t\tlet batch_offset = i * batch_size;\n\t\t\tlet batch_nicks = nicks.slice(batch_offset, batch_offset + batch_size);\n\t\t\tlet batch_mode = action + privilege.repeat(batch_nicks.length);\n\t\t\tlet batch_args = ['MODE', channel, batch_mode].concat(batch_nicks);\n\n\t\t\tthis.lib.send.apply(this.lib, batch_args);\n\t\t}\n\t}\n\n\ttell(target, message, prefix) {\n\t\tthis.sendMessage('PRIVMSG', target, message, prefix);\n\t}\n\n\tnotify(target, message, prefix) {\n\t\tthis.sendMessage('NOTICE', target, message, prefix);\n\t}\n\n\tgiveOps(channel, nicks) {\n\t\tthis.setPrivileges(channel, '+', 'o', nicks);\n\t}\n\n\ttakeOps(channel, nicks) {\n\t\tthis.setPrivileges(channel, '-', 'o', nicks);\n\t}\n\n\tgiveHops(channel, nicks) {\n\t\tthis.setPrivileges(channel, '+', 'h', nicks);\n\t}\n\n\ttakeHops(channel, nicks) {\n\t\tthis.setPrivileges(channel, '-', 'h', nicks);\n\t}\n\n\tgiveVoices(channel, nicks) {\n\t\tthis.setPrivileges(channel, '+', 'v', nicks);\n\t}\n\n\ttakeVoices(channel, nicks) {\n\t\tthis.setPrivileges(channel, '-', 'v', nicks);\n\t}\n}\n\nmodule.exports = ClientWrapper;\n",
+    "static": true,
+    "longname": "/home/fkm/Development/GitHub/rx-irc/bot/app/client-wrapper.js",
+    "access": "public",
+    "description": null,
+    "lineNumber": 1
+  },
+  {
+    "__docId__": 1,
+    "kind": "variable",
+    "name": "fromEvent",
+    "memberof": "rx-irc/bot/app/client-wrapper.js",
+    "static": true,
+    "longname": "rx-irc/bot/app/client-wrapper.js~fromEvent",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot/app/client-wrapper.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 5,
+    "undocument": true
+  },
+  {
+    "__docId__": 2,
+    "kind": "variable",
+    "name": "takeUntil",
+    "memberof": "rx-irc/bot/app/client-wrapper.js",
+    "static": true,
+    "longname": "rx-irc/bot/app/client-wrapper.js~takeUntil",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot/app/client-wrapper.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 7,
+    "undocument": true
+  },
+  {
+    "__docId__": 3,
+    "kind": "external",
+    "name": "Client",
+    "externalLink": "https://www.npmjs.com/package/irc",
+    "memberof": "rx-irc/bot/app/client-wrapper.js",
+    "static": true,
+    "longname": "rx-irc/bot/app/client-wrapper.js~Client",
+    "access": "public",
+    "description": null
+  },
+  {
+    "__docId__": 4,
+    "kind": "variable",
+    "name": "defaults",
+    "memberof": "rx-irc/bot/app/client-wrapper.js",
+    "static": true,
+    "longname": "rx-irc/bot/app/client-wrapper.js~defaults",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot/app/client-wrapper.js",
+    "importStyle": null,
+    "description": "",
+    "see": [
+      "https://node-irc.readthedocs.io/en/latest/API.html#client"
+    ],
+    "lineNumber": 38,
+    "properties": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "'rxbot'",
+        "defaultRaw": "'rxbot'",
+        "name": "userName",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "'ReactiveX&nbsp;IRC&nbsp;bot'",
+        "defaultRaw": "'ReactiveX&nbsp;IRC&nbsp;bot'",
+        "name": "realName",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "null",
+        "defaultRaw": null,
+        "name": "localAddress",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "boolean"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "false",
+        "defaultRaw": false,
+        "name": "debug",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "boolean"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "true",
+        "defaultRaw": true,
+        "name": "showErrors",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "boolean"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "false",
+        "defaultRaw": false,
+        "name": "autoRejoin",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "boolean"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "false",
+        "defaultRaw": false,
+        "name": "autoConnect",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "boolean"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "true",
+        "defaultRaw": true,
+        "name": "secure",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "boolean"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "true",
+        "defaultRaw": true,
+        "name": "selfSigned",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "boolean"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "true",
+        "defaultRaw": true,
+        "name": "certExpired",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "boolean"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "false",
+        "defaultRaw": false,
+        "name": "floodProtection",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "number"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "1000",
+        "defaultRaw": 1000,
+        "name": "floodProtectionDelay",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "boolean"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "false",
+        "defaultRaw": false,
+        "name": "sasl",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "number"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "0",
+        "defaultRaw": 0,
+        "name": "retryCount",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "number"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "2000",
+        "defaultRaw": 2000,
+        "name": "retryDelay",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "boolean"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "true",
+        "defaultRaw": true,
+        "name": "stripColors",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "'&amp;#'",
+        "defaultRaw": "'&amp;#'",
+        "name": "channelPrefixes",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "number"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "512",
+        "defaultRaw": 512,
+        "name": "messageSplit",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "'UTF-8'",
+        "defaultRaw": "'UTF-8'",
+        "name": "encoding",
+        "description": ""
+      }
+    ],
+    "type": {
+      "nullable": null,
+      "types": [
+        "Object"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 5,
+    "kind": "class",
+    "name": "ClientWrapper",
+    "memberof": "rx-irc/bot/app/client-wrapper.js",
+    "static": true,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "access": "public",
+    "export": true,
+    "importPath": "@rx-irc/bot/rx-irc/bot/app/client-wrapper.js",
+    "importStyle": "ClientWrapper",
+    "description": null,
+    "lineNumber": 60,
+    "undocument": true,
+    "interface": false
+  },
+  {
+    "__docId__": 6,
+    "kind": "constructor",
+    "name": "constructor",
+    "memberof": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper#constructor",
+    "access": "public",
+    "description": null,
+    "lineNumber": 61,
+    "undocument": true
+  },
+  {
+    "__docId__": 7,
+    "kind": "member",
+    "name": "settings",
+    "memberof": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "static": false,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper#settings",
+    "access": "public",
+    "description": null,
+    "lineNumber": 63,
+    "type": {
+      "nullable": null,
+      "types": [
+        "object"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 8,
+    "kind": "member",
+    "name": "lib",
+    "memberof": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "static": false,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper#lib",
+    "access": "public",
+    "description": null,
+    "lineNumber": 65,
+    "undocument": true
+  },
+  {
+    "__docId__": 9,
+    "kind": "member",
+    "name": "raw$",
+    "memberof": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "static": false,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper#raw$",
+    "access": "public",
+    "description": null,
+    "lineNumber": 71,
+    "undocument": true
+  },
+  {
+    "__docId__": 10,
+    "kind": "method",
+    "name": "connect",
+    "memberof": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper#connect",
+    "access": "public",
+    "description": null,
+    "lineNumber": 82,
+    "undocument": true
+  },
+  {
+    "__docId__": 11,
+    "kind": "method",
+    "name": "disconnect",
+    "memberof": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper#disconnect",
+    "access": "public",
+    "description": null,
+    "lineNumber": 86,
+    "undocument": true
+  },
+  {
+    "__docId__": 12,
+    "kind": "method",
+    "name": "join",
+    "memberof": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper#join",
+    "access": "public",
+    "description": null,
+    "lineNumber": 90,
+    "undocument": true
+  },
+  {
+    "__docId__": 13,
+    "kind": "method",
+    "name": "part",
+    "memberof": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper#part",
+    "access": "public",
+    "description": null,
+    "lineNumber": 99,
+    "undocument": true
+  },
+  {
+    "__docId__": 14,
+    "kind": "method",
+    "name": "kick",
+    "memberof": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper#kick",
+    "access": "public",
+    "description": null,
+    "lineNumber": 108,
+    "undocument": true
+  },
+  {
+    "__docId__": 15,
+    "kind": "method",
+    "name": "getNick",
+    "memberof": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper#getNick",
+    "access": "public",
+    "description": null,
+    "lineNumber": 125,
+    "undocument": true
+  },
+  {
+    "__docId__": 16,
+    "kind": "method",
+    "name": "setNick",
+    "memberof": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper#setNick",
+    "access": "public",
+    "description": null,
+    "lineNumber": 129,
+    "undocument": true
+  },
+  {
+    "__docId__": 17,
+    "kind": "method",
+    "name": "getTopic",
+    "memberof": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper#getTopic",
+    "access": "public",
+    "description": null,
+    "lineNumber": 133,
+    "undocument": true
+  },
+  {
+    "__docId__": 18,
+    "kind": "method",
+    "name": "setTopic",
+    "memberof": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper#setTopic",
+    "access": "public",
+    "description": null,
+    "lineNumber": 148,
+    "undocument": true
+  },
+  {
+    "__docId__": 19,
+    "kind": "method",
+    "name": "sendMessage",
+    "memberof": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper#sendMessage",
+    "access": "public",
+    "description": null,
+    "lineNumber": 152,
+    "undocument": true
+  },
+  {
+    "__docId__": 20,
+    "kind": "method",
+    "name": "setPrivileges",
+    "memberof": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper#setPrivileges",
+    "access": "public",
+    "description": null,
+    "lineNumber": 172,
+    "undocument": true
+  },
+  {
+    "__docId__": 21,
+    "kind": "method",
+    "name": "tell",
+    "memberof": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper#tell",
+    "access": "public",
+    "description": null,
+    "lineNumber": 195,
+    "undocument": true
+  },
+  {
+    "__docId__": 22,
+    "kind": "method",
+    "name": "notify",
+    "memberof": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper#notify",
+    "access": "public",
+    "description": null,
+    "lineNumber": 199,
+    "undocument": true
+  },
+  {
+    "__docId__": 23,
+    "kind": "method",
+    "name": "giveOps",
+    "memberof": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper#giveOps",
+    "access": "public",
+    "description": null,
+    "lineNumber": 203,
+    "undocument": true
+  },
+  {
+    "__docId__": 24,
+    "kind": "method",
+    "name": "takeOps",
+    "memberof": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper#takeOps",
+    "access": "public",
+    "description": null,
+    "lineNumber": 207,
+    "undocument": true
+  },
+  {
+    "__docId__": 25,
+    "kind": "method",
+    "name": "giveHops",
+    "memberof": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper#giveHops",
+    "access": "public",
+    "description": null,
+    "lineNumber": 211,
+    "undocument": true
+  },
+  {
+    "__docId__": 26,
+    "kind": "method",
+    "name": "takeHops",
+    "memberof": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper#takeHops",
+    "access": "public",
+    "description": null,
+    "lineNumber": 215,
+    "undocument": true
+  },
+  {
+    "__docId__": 27,
+    "kind": "method",
+    "name": "giveVoices",
+    "memberof": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper#giveVoices",
+    "access": "public",
+    "description": null,
+    "lineNumber": 219,
+    "undocument": true
+  },
+  {
+    "__docId__": 28,
+    "kind": "method",
+    "name": "takeVoices",
+    "memberof": "rx-irc/bot/app/client-wrapper.js~ClientWrapper",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot/app/client-wrapper.js~ClientWrapper#takeVoices",
+    "access": "public",
+    "description": null,
+    "lineNumber": 223,
+    "undocument": true
+  },
+  {
+    "__docId__": 29,
+    "kind": "file",
+    "name": "rx-irc/bot/app/start.js",
+    "content": "// Local Dependencies\nconst ClientWrapper = require('./client-wrapper');\nconst logger = require('./logger');\nconst config = require('../config');\n\nlet client = new ClientWrapper(config.client);\n\nclient.connect(() => {\n\tlogger.info(`Connected to ${config.server}.`);\n\n\tconfig.modules\n\t\t.filter(module => module.enabled !== false)\n\t\t.forEach(module => {\n\t\t\tlet Module = require(`@rx-irc/bot-${module.name}`);\n\t\t\tnew Module(client, module.options);\n\n\t\t\tlogger.info(`Loaded module ${module.name}.`);\n\t\t});\n});\n",
+    "static": true,
+    "longname": "/home/fkm/Development/GitHub/rx-irc/bot/app/start.js",
+    "access": "public",
+    "description": null,
+    "lineNumber": 1
+  },
+  {
+    "__docId__": 30,
+    "kind": "variable",
+    "name": "client",
+    "memberof": "rx-irc/bot/app/start.js",
+    "static": true,
+    "longname": "rx-irc/bot/app/start.js~client",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot/app/start.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 6,
+    "undocument": true
+  },
+  {
+    "__docId__": 31,
+    "kind": "file",
+    "name": "rx-irc/bot-1337/lib/module.js",
+    "content": "// NPM Dependencies\nconst assert = require('assert');\nconst { interval } = require('rxjs');\n\n// Local Depdendencies\nconst logger = require('./logger');\nconst { version } = require('../package.json');\n\nlet defaults = {};\n\nmodule.exports = class LeetModule {\n\t/**\n\t * @param {ClientWrapper} client\n\t * @param {object} options\n\t * @param {string} options.channel\n\t * @param {string} options.logLevel='error'\n\t */\n\tconstructor(client, options) {\n\t\tassert.match(options.channel, /^#.+/i);\n\n\t\t/** @type {object} */\n\t\tthis.settings = { ...defaults, ...options };\n\t\t/** @type {string} */\n\t\tthis.version = version;\n\n\t\t//  ____  _\n\t\t// / ___|| |_ _ __ ___  __ _ _ __ ___  ___\n\t\t// \\___ \\| __| '__/ _ \\/ _` | '_ ` _ \\/ __|\n\t\t//  ___) | |_| | |  __/ (_| | | | | | \\__ \\\n\t\t// |____/ \\__|_|  \\___|\\__,_|_| |_| |_|___/\n\t\t//\n\n\t\tlet interval$ = interval(1000 * 60);\n\n\t\t//  ____        _                   _       _   _\n\t\t// / ___| _   _| |__  ___  ___ _ __(_)_ __ | |_(_) ___  _ __  ___\n\t\t// \\___ \\| | | | '_ \\/ __|/ __| '__| | '_ \\| __| |/ _ \\| '_ \\/ __|\n\t\t//  ___) | |_| | |_) \\__ \\ (__| |  | | |_) | |_| | (_) | | | \\__ \\\n\t\t// |____/ \\__,_|_.__/|___/\\___|_|  |_| .__/ \\__|_|\\___/|_| |_|___/\n\t\t//                                   |_|\n\t\t//\n\n\t\tinterval$.subscribe(() => {\n\t\t\tvar now = new Date();\n\n\t\t\tif (now.getHours() == 13 && now.getMinutes() == 37) {\n\t\t\t\tlogger.info('13:37');\n\n\t\t\t\tclient.tell(this.settings.channel, '13:37');\n\t\t\t}\n\t\t});\n\t}\n};\n",
+    "static": true,
+    "longname": "/home/fkm/Development/GitHub/rx-irc/bot-1337/lib/module.js",
+    "access": "public",
+    "description": null,
+    "lineNumber": 1
+  },
+  {
+    "__docId__": 32,
+    "kind": "variable",
+    "name": "interval",
+    "memberof": "rx-irc/bot-1337/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-1337/lib/module.js~interval",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-1337/lib/module.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 4,
+    "undocument": true
+  },
+  {
+    "__docId__": 33,
+    "kind": "variable",
+    "name": "version",
+    "memberof": "rx-irc/bot-1337/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-1337/lib/module.js~version",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-1337/lib/module.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 9,
+    "undocument": true
+  },
+  {
+    "__docId__": 34,
+    "kind": "variable",
+    "name": "defaults",
+    "memberof": "rx-irc/bot-1337/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-1337/lib/module.js~defaults",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-1337/lib/module.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 11,
+    "undocument": true
+  },
+  {
+    "__docId__": 35,
+    "kind": "class",
+    "name": "LeetModule",
+    "memberof": "rx-irc/bot-1337/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-1337/lib/module.js~LeetModule",
+    "access": "public",
+    "export": true,
+    "importPath": "@rx-irc/bot/rx-irc/bot-1337/lib/module.js",
+    "importStyle": "LeetModule",
+    "description": null,
+    "lineNumber": 13,
+    "undocument": true,
+    "interface": false
+  },
+  {
+    "__docId__": 36,
+    "kind": "constructor",
+    "name": "constructor",
+    "memberof": "rx-irc/bot-1337/lib/module.js~LeetModule",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-1337/lib/module.js~LeetModule#constructor",
+    "access": "public",
+    "description": "",
+    "lineNumber": 20,
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "ClientWrapper"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "client",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "object"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "options",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "options.channel",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "'error'",
+        "defaultRaw": "'error'",
+        "name": "options.logLevel",
+        "description": ""
+      }
+    ]
+  },
+  {
+    "__docId__": 37,
+    "kind": "member",
+    "name": "settings",
+    "memberof": "rx-irc/bot-1337/lib/module.js~LeetModule",
+    "static": false,
+    "longname": "rx-irc/bot-1337/lib/module.js~LeetModule#settings",
+    "access": "public",
+    "description": null,
+    "lineNumber": 24,
+    "type": {
+      "nullable": null,
+      "types": [
+        "object"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 38,
+    "kind": "member",
+    "name": "version",
+    "memberof": "rx-irc/bot-1337/lib/module.js~LeetModule",
+    "static": false,
+    "longname": "rx-irc/bot-1337/lib/module.js~LeetModule#version",
+    "access": "public",
+    "description": null,
+    "lineNumber": 26,
+    "type": {
+      "nullable": null,
+      "types": [
+        "string"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 39,
+    "kind": "file",
+    "name": "rx-irc/bot-aare/lib/module.js",
+    "content": "// NPM Dependencies\nconst axios = require('axios');\nconst { filter } = require('rxjs/operators');\n\n// Local Depdendencies\nconst logger = require('./logger');\nconst { version } = require('../package.json');\n\nconst AARE_API_URL = 'https://aaremarzili-api.herokuapp.com/rest/open/wasserdatencurrent';\nconst AARE_ORIGIN_URL = 'https://aaremarzili.ch/';\nconst AARE_RIVER_NAME = 'AAREMARZILIBERN';\n\nlet defaults = {};\n\nmodule.exports = class AareModule {\n\t/**\n\t * @param {ClientWrapper} client\n\t * @param {object} options\n\t * @param {string} options.logLevel='error'\n\t */\n\tconstructor(client, options) {\n\t\t/** @type {object} */\n\t\tthis.settings = { ...defaults, ...options };\n\t\t/** @type {string} */\n\t\tthis.version = version;\n\n\t\t//  ____  _\n\t\t// / ___|| |_ _ __ ___  __ _ _ __ ___  ___\n\t\t// \\___ \\| __| '__/ _ \\/ _` | '_ ` _ \\/ __|\n\t\t//  ___) | |_| | |  __/ (_| | | | | | \\__ \\\n\t\t// |____/ \\__|_|  \\___|\\__,_|_| |_| |_|___/\n\t\t//\n\n\t\tlet aare$ = client.raw$.pipe(\n\t\t\tfilter(message => message.command === 'PRIVMSG'),\n\t\t\tfilter(message => message.args[1].startsWith('!aare'))\n\t\t);\n\n\t\t//  ____        _                   _       _   _\n\t\t// / ___| _   _| |__  ___  ___ _ __(_)_ __ | |_(_) ___  _ __  ___\n\t\t// \\___ \\| | | | '_ \\/ __|/ __| '__| | '_ \\| __| |/ _ \\| '_ \\/ __|\n\t\t//  ___) | |_| | |_) \\__ \\ (__| |  | | |_) | |_| | (_) | | | \\__ \\\n\t\t// |____/ \\__,_|_.__/|___/\\___|_|  |_| .__/ \\__|_|\\___/|_| |_|___/\n\t\t//                                   |_|\n\t\t//\n\n\t\taare$.subscribe(async message => {\n\t\t\tlet target = message.args[0];\n\n\t\t\ttry {\n\t\t\t\tlet response = await axios({\n\t\t\t\t\turl: AARE_API_URL,\n\t\t\t\t\theaders: {\n\t\t\t\t\t\t'Origin': AARE_ORIGIN_URL,\n\t\t\t\t\t\t'X-River': AARE_RIVER_NAME,\n\t\t\t\t\t},\n\t\t\t\t});\n\n\t\t\t\tlet temp_current = response.data.t;\n\t\t\t\tlet temp_future = response.data.tf;\n\t\t\t\tlet prediction;\n\n\t\t\t\tif (temp_future > 0) {\n\t\t\t\t\tprediction = 'wird schins wermer';\n\t\t\t\t} else if (temp_future < 0) {\n\t\t\t\t\tprediction = 'wird schins cheuter';\n\t\t\t\t} else {\n\t\t\t\t\tprediction = 'blibt schins glich';\n\t\t\t\t}\n\n\t\t\t\tlet sentence = `D'aare isch im Momänt öppe ${temp_current}° warm u si ${prediction}.`;\n\n\t\t\t\tlogger.info(`${temp_current}° (${temp_future})`);\n\n\t\t\t\tclient.tell(target, sentence);\n\t\t\t} catch (error) {\n\t\t\t\tlogger.error(error.message);\n\n\t\t\t\tclient.tell(target, `Error: ${error.message}`);\n\t\t\t}\n\t\t});\n\t}\n};\n",
+    "static": true,
+    "longname": "/home/fkm/Development/GitHub/rx-irc/bot-aare/lib/module.js",
+    "access": "public",
+    "description": null,
+    "lineNumber": 1
+  },
+  {
+    "__docId__": 40,
+    "kind": "variable",
+    "name": "filter",
+    "memberof": "rx-irc/bot-aare/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-aare/lib/module.js~filter",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-aare/lib/module.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 4,
+    "undocument": true
+  },
+  {
+    "__docId__": 41,
+    "kind": "variable",
+    "name": "version",
+    "memberof": "rx-irc/bot-aare/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-aare/lib/module.js~version",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-aare/lib/module.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 9,
+    "undocument": true
+  },
+  {
+    "__docId__": 42,
+    "kind": "variable",
+    "name": "AARE_API_URL",
+    "memberof": "rx-irc/bot-aare/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-aare/lib/module.js~AARE_API_URL",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-aare/lib/module.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 11,
+    "undocument": true
+  },
+  {
+    "__docId__": 43,
+    "kind": "variable",
+    "name": "AARE_ORIGIN_URL",
+    "memberof": "rx-irc/bot-aare/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-aare/lib/module.js~AARE_ORIGIN_URL",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-aare/lib/module.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 12,
+    "undocument": true
+  },
+  {
+    "__docId__": 44,
+    "kind": "variable",
+    "name": "AARE_RIVER_NAME",
+    "memberof": "rx-irc/bot-aare/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-aare/lib/module.js~AARE_RIVER_NAME",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-aare/lib/module.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 13,
+    "undocument": true
+  },
+  {
+    "__docId__": 45,
+    "kind": "variable",
+    "name": "defaults",
+    "memberof": "rx-irc/bot-aare/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-aare/lib/module.js~defaults",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-aare/lib/module.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 15,
+    "undocument": true
+  },
+  {
+    "__docId__": 46,
+    "kind": "class",
+    "name": "AareModule",
+    "memberof": "rx-irc/bot-aare/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-aare/lib/module.js~AareModule",
+    "access": "public",
+    "export": true,
+    "importPath": "@rx-irc/bot/rx-irc/bot-aare/lib/module.js",
+    "importStyle": "AareModule",
+    "description": null,
+    "lineNumber": 17,
+    "undocument": true,
+    "interface": false
+  },
+  {
+    "__docId__": 47,
+    "kind": "constructor",
+    "name": "constructor",
+    "memberof": "rx-irc/bot-aare/lib/module.js~AareModule",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-aare/lib/module.js~AareModule#constructor",
+    "access": "public",
+    "description": "",
+    "lineNumber": 23,
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "ClientWrapper"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "client",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "object"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "options",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "'error'",
+        "defaultRaw": "'error'",
+        "name": "options.logLevel",
+        "description": ""
+      }
+    ]
+  },
+  {
+    "__docId__": 48,
+    "kind": "member",
+    "name": "settings",
+    "memberof": "rx-irc/bot-aare/lib/module.js~AareModule",
+    "static": false,
+    "longname": "rx-irc/bot-aare/lib/module.js~AareModule#settings",
+    "access": "public",
+    "description": null,
+    "lineNumber": 25,
+    "type": {
+      "nullable": null,
+      "types": [
+        "object"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 49,
+    "kind": "member",
+    "name": "version",
+    "memberof": "rx-irc/bot-aare/lib/module.js~AareModule",
+    "static": false,
+    "longname": "rx-irc/bot-aare/lib/module.js~AareModule#version",
+    "access": "public",
+    "description": null,
+    "lineNumber": 27,
+    "type": {
+      "nullable": null,
+      "types": [
+        "string"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 50,
+    "kind": "file",
+    "name": "rx-irc/bot-admin/lib/module.js",
+    "content": "// NPM Dependencies\nconst { filter } = require('rxjs/operators');\n\n// Local Depdendencies\nconst logger = require('./logger');\nconst { version } = require('../package.json');\n\n/** Pattern for JOIN command. */\nconst REGEXP_JOIN = /^join (\\S+)$/i;\n/** Pattern for PART command. */\nconst REGEXP_PART = /^part (\\S+)(?: (.+))?\\s*$/i;\n/** Pattern for MODE command. */\nconst REGEXP_MODE = /^mode (\\S+) ([+-a-z]+)(?: (.+))?\\s*$/i;\n/** Pattern for TOPIC command. */\nconst REGEXP_TOPIC = /^topic (\\S+) (.+)\\s*$/i;\n/** Pattern for KICK command. */\nconst REGEXP_KICK = /^kick (\\S+) (\\S+)(?: (.+))?\\s*$/i;\n/** Pattern for NICK command. */\nconst REGEXP_NICK = /^nick (\\S+)$/i;\n/** Pattern for privilege commands. Give or take channel modes o, h, v. */\nconst REGEXP_PRIVS = /^((?:give|take)(?:Ops|Hops|Voices)) (\\S+) (.+)$/\n/** Pattern for talk commands. Alias for PRIVMSG & NOTICE commands. */\nconst REGEXP_TALK = /^(tell|notify) (\\S+) (.+)$/\n\nlet defaults = {\n\tregexp: '^nick!user@',\n};\n\nmodule.exports = class AdminModule {\n\t/**\n\t * @param {ClientWrapper} client\n\t * @param {object} options\n\t * @param {RegExp} options.regexp='^nick!user@'\n\t */\n\tconstructor(client, options) {\n\t\t/** @type {object} */\n\t\tthis.settings = { ...defaults, ...options };\n\t\tthis.settings.regexp = new RegExp(this.settings.regexp);\n\t\t/** @type {string} */\n\t\tthis.version = version;\n\n\t\t//  ____  _\n\t\t// / ___|| |_ _ __ ___  __ _ _ __ ___  ___\n\t\t// \\___ \\| __| '__/ _ \\/ _` | '_ ` _ \\/ __|\n\t\t//  ___) | |_| | |  __/ (_| | | | | | \\__ \\\n\t\t// |____/ \\__|_|  \\___|\\__,_|_| |_| |_|___/\n\t\t//\n\n\t\tlet admin$ = client.raw$.pipe(\n\t\t\tfilter(message => message.command === 'PRIVMSG'),\n\t\t\tfilter(message => message.args[0] === client.getNick()),\n\t\t\tfilter(message => this.settings.regexp.test(message.prefix))\n\t\t);\n\n\t\t//  ____        _                   _       _   _\n\t\t// / ___| _   _| |__  ___  ___ _ __(_)_ __ | |_(_) ___  _ __  ___\n\t\t// \\___ \\| | | | '_ \\/ __|/ __| '__| | '_ \\| __| |/ _ \\| '_ \\/ __|\n\t\t//  ___) | |_| | |_) \\__ \\ (__| |  | | |_) | |_| | (_) | | | \\__ \\\n\t\t// |____/ \\__,_|_.__/|___/\\___|_|  |_| .__/ \\__|_|\\___/|_| |_|___/\n\t\t//                                   |_|\n\t\t//\n\n\t\tadmin$.subscribe(message => {\n\t\t\tlet request = message.args[1].trim();\n\n\t\t\tif (request === 'quit') {\n\t\t\t\tlogger.info('Shutting down.');\n\t\t\t\tclient.disconnect('Gone', () => {\n\t\t\t\t\tsetTimeout(() => process.exit(0), 3000);\n\t\t\t\t});\n\t\t\t} else if (REGEXP_JOIN.test(request)) {\n\t\t\t\tlet [, channel] = request.match(REGEXP_JOIN);\n\t\t\t\tlogger.info(`Joining channel ${channel}.`);\n\t\t\t\tclient.join(channel);\n\t\t\t} else if (REGEXP_PART.test(request)) {\n\t\t\t\tlet [, channel, text] = request.match(REGEXP_PART);\n\t\t\t\tlogger.info(`Parting channel ${channel}.`);\n\t\t\t\tclient.part(channel, text);\n\t\t\t} else if (REGEXP_MODE.test(request)) {\n\t\t\t\tlet [, channel, flags, args] = request.match(REGEXP_MODE);\n\t\t\t\tlet command = ['MODE', channel, flags];\n\t\t\t\tif (args) {\n\t\t\t\t\tcommand = command.concat(args.split(' '));\n\t\t\t\t}\n\t\t\t\tlogger.info(command.join(' '));\n\t\t\t\tclient.lib.send.apply(client.lib, command);\n\t\t\t} else if (REGEXP_TOPIC.test(request)) {\n\t\t\t\tlet [, channel, topic] = request.match(REGEXP_TOPIC);\n\t\t\t\tlogger.info(`Setting topic of ${channel} to: ${topic}`);\n\t\t\t\tclient.setTopic(channel, topic);\n\t\t\t} else if (REGEXP_KICK.test(request)) {\n\t\t\t\tlet [, channel, user, reason] = request.match(REGEXP_KICK);\n\t\t\t\tlogger.info(`Kicking ${user} from \"${channel}\".`);\n\t\t\t\tif (reason) {\n\t\t\t\t\tlogger.info(`Reason: ${reason}`);\n\t\t\t\t}\n\t\t\t\tclient.kick(channel, user, reason);\n\t\t\t} else if (REGEXP_NICK.test(request)) {\n\t\t\t\tlet [, nick] = request.match(REGEXP_NICK);\n\t\t\t\tlogger.info(`Changing nick to ${nick}.`);\n\t\t\t\tclient.setNick(nick);\n\t\t\t} else if (REGEXP_PRIVS.test(request)) {\n\t\t\t\tlet [, method, channel, nicks] = request.match(REGEXP_PRIVS);\n\t\t\t\tlogger.info(`${method.toUpperCase()} ${channel}: ${nicks}`);\n\t\t\t\tclient[method](channel, nicks.split(' '));\n\t\t\t} else if (REGEXP_TALK.test(request)) {\n\t\t\t\tlet [, method, target, message] = request.match(REGEXP_TALK);\n\t\t\t\tlogger.info(`${method.toUpperCase()} ${target}: ${message}`);\n\t\t\t\tclient[method](target, message);\n\t\t\t}\n\t\t});\n\t}\n}\n",
+    "static": true,
+    "longname": "/home/fkm/Development/GitHub/rx-irc/bot-admin/lib/module.js",
+    "access": "public",
+    "description": null,
+    "lineNumber": 1
+  },
+  {
+    "__docId__": 51,
+    "kind": "variable",
+    "name": "filter",
+    "memberof": "rx-irc/bot-admin/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-admin/lib/module.js~filter",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-admin/lib/module.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 3,
+    "undocument": true
+  },
+  {
+    "__docId__": 52,
+    "kind": "variable",
+    "name": "version",
+    "memberof": "rx-irc/bot-admin/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-admin/lib/module.js~version",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-admin/lib/module.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 8,
+    "undocument": true
+  },
+  {
+    "__docId__": 53,
+    "kind": "variable",
+    "name": "REGEXP_JOIN",
+    "memberof": "rx-irc/bot-admin/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-admin/lib/module.js~REGEXP_JOIN",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-admin/lib/module.js",
+    "importStyle": null,
+    "description": "Pattern for JOIN command.",
+    "lineNumber": 11
+  },
+  {
+    "__docId__": 54,
+    "kind": "variable",
+    "name": "REGEXP_PART",
+    "memberof": "rx-irc/bot-admin/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-admin/lib/module.js~REGEXP_PART",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-admin/lib/module.js",
+    "importStyle": null,
+    "description": "Pattern for PART command.",
+    "lineNumber": 13
+  },
+  {
+    "__docId__": 55,
+    "kind": "variable",
+    "name": "REGEXP_MODE",
+    "memberof": "rx-irc/bot-admin/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-admin/lib/module.js~REGEXP_MODE",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-admin/lib/module.js",
+    "importStyle": null,
+    "description": "Pattern for MODE command.",
+    "lineNumber": 15
+  },
+  {
+    "__docId__": 56,
+    "kind": "variable",
+    "name": "REGEXP_TOPIC",
+    "memberof": "rx-irc/bot-admin/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-admin/lib/module.js~REGEXP_TOPIC",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-admin/lib/module.js",
+    "importStyle": null,
+    "description": "Pattern for TOPIC command.",
+    "lineNumber": 17
+  },
+  {
+    "__docId__": 57,
+    "kind": "variable",
+    "name": "REGEXP_KICK",
+    "memberof": "rx-irc/bot-admin/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-admin/lib/module.js~REGEXP_KICK",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-admin/lib/module.js",
+    "importStyle": null,
+    "description": "Pattern for KICK command.",
+    "lineNumber": 19
+  },
+  {
+    "__docId__": 58,
+    "kind": "variable",
+    "name": "REGEXP_NICK",
+    "memberof": "rx-irc/bot-admin/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-admin/lib/module.js~REGEXP_NICK",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-admin/lib/module.js",
+    "importStyle": null,
+    "description": "Pattern for NICK command.",
+    "lineNumber": 21
+  },
+  {
+    "__docId__": 59,
+    "kind": "variable",
+    "name": "REGEXP_PRIVS",
+    "memberof": "rx-irc/bot-admin/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-admin/lib/module.js~REGEXP_PRIVS",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-admin/lib/module.js",
+    "importStyle": null,
+    "description": "Pattern for privilege commands. Give or take channel modes o, h, v.",
+    "lineNumber": 23
+  },
+  {
+    "__docId__": 60,
+    "kind": "variable",
+    "name": "REGEXP_TALK",
+    "memberof": "rx-irc/bot-admin/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-admin/lib/module.js~REGEXP_TALK",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-admin/lib/module.js",
+    "importStyle": null,
+    "description": "Pattern for talk commands. Alias for PRIVMSG & NOTICE commands.",
+    "lineNumber": 25
+  },
+  {
+    "__docId__": 61,
+    "kind": "variable",
+    "name": "defaults",
+    "memberof": "rx-irc/bot-admin/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-admin/lib/module.js~defaults",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-admin/lib/module.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 27,
+    "undocument": true
+  },
+  {
+    "__docId__": 62,
+    "kind": "class",
+    "name": "AdminModule",
+    "memberof": "rx-irc/bot-admin/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-admin/lib/module.js~AdminModule",
+    "access": "public",
+    "export": true,
+    "importPath": "@rx-irc/bot/rx-irc/bot-admin/lib/module.js",
+    "importStyle": "AdminModule",
+    "description": null,
+    "lineNumber": 31,
+    "undocument": true,
+    "interface": false
+  },
+  {
+    "__docId__": 63,
+    "kind": "constructor",
+    "name": "constructor",
+    "memberof": "rx-irc/bot-admin/lib/module.js~AdminModule",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-admin/lib/module.js~AdminModule#constructor",
+    "access": "public",
+    "description": "",
+    "lineNumber": 37,
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "ClientWrapper"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "client",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "object"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "options",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "RegExp"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "'^nick!user@'",
+        "defaultRaw": "'^nick!user@'",
+        "name": "options.regexp",
+        "description": ""
+      }
+    ]
+  },
+  {
+    "__docId__": 64,
+    "kind": "member",
+    "name": "settings",
+    "memberof": "rx-irc/bot-admin/lib/module.js~AdminModule",
+    "static": false,
+    "longname": "rx-irc/bot-admin/lib/module.js~AdminModule#settings",
+    "access": "public",
+    "description": null,
+    "lineNumber": 39,
+    "type": {
+      "nullable": null,
+      "types": [
+        "object"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 65,
+    "kind": "member",
+    "name": "version",
+    "memberof": "rx-irc/bot-admin/lib/module.js~AdminModule",
+    "static": false,
+    "longname": "rx-irc/bot-admin/lib/module.js~AdminModule#version",
+    "access": "public",
+    "description": null,
+    "lineNumber": 42,
+    "type": {
+      "nullable": null,
+      "types": [
+        "string"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 66,
+    "kind": "file",
+    "name": "rx-irc/bot-fun/lib/module.js",
+    "content": "// NPM Dependencies\nconst { filter } = require('rxjs/operators');\nconst { spawn } = require('child_process');\n\n// Local Depdendencies\nconst logger = require('./logger');\nconst { version } = require('../package.json');\n\nlet defaults = {};\n\nmodule.exports = class FunModule {\n\t/**\n\t * @param {ClientWrapper} client\n\t * @param {object} options\n\t */\n\tconstructor(client, options) {\n\t\t/** @type {object} */\n\t\tthis.settings = { ...defaults, ...options };\n\t\t/** @type {string} */\n\t\tthis.version = version;\n\n\t\t//  ____  _\n\t\t// / ___|| |_ _ __ ___  __ _ _ __ ___  ___\n\t\t// \\___ \\| __| '__/ _ \\/ _` | '_ ` _ \\/ __|\n\t\t//  ___) | |_| | |  __/ (_| | | | | | \\__ \\\n\t\t// |____/ \\__|_|  \\___|\\__,_|_| |_| |_|___/\n\t\t//\n\n\t\tlet privmsg$ = client.raw$.pipe(\n\t\t\tfilter(message => message.command === 'PRIVMSG')\n\t\t);\n\n\t\tlet figlet$ = privmsg$.pipe(\n\t\t\tfilter(message => message.args[1].startsWith('!figlet'))\n\t\t);\n\n\t\tlet cowsay$ = privmsg$.pipe(\n\t\t\tfilter(message => message.args[1].startsWith('!cowsay'))\n\t\t);\n\n\t\tlet fortune$ = privmsg$.pipe(\n\t\t\tfilter(message => message.args[1] === '!fortune')\n\t\t);\n\n\t\tlet fortunesay$ = privmsg$.pipe(\n\t\t\tfilter(message => message.args[1] === '!fortunesay')\n\t\t);\n\n\t\tlet roll$ = privmsg$.pipe(\n\t\t\tfilter(message => message.args[1].startsWith('!roll'))\n\t\t);\n\n\t\t//  ____        _                   _       _   _\n\t\t// / ___| _   _| |__  ___  ___ _ __(_)_ __ | |_(_) ___  _ __  ___\n\t\t// \\___ \\| | | | '_ \\/ __|/ __| '__| | '_ \\| __| |/ _ \\| '_ \\/ __|\n\t\t//  ___) | |_| | |_) \\__ \\ (__| |  | | |_) | |_| | (_) | | | \\__ \\\n\t\t// |____/ \\__,_|_.__/|___/\\___|_|  |_| .__/ \\__|_|\\___/|_| |_|___/\n\t\t//                                   |_|\n\t\t//\n\n\t\tfiglet$.subscribe(message => {\n\t\t\tlet nick = message.args[0];\n\t\t\tlet text = message.args[1].substring(8).trim();\n\n\t\t\tif (text.length === 0) {\n\t\t\t\tclient.tell(nick, 'No text provided.');\n\t\t\t} else {\n\t\t\t\tlet params = [];\n\n\t\t\t\tif (/\\[[\\w\\d-]+\\] .+/i.test(text)) {\n\t\t\t\t\tlet [, file, text_trimmed] = text.match(/\\[([\\w\\d-]+)\\] (.+)/i);\n\n\t\t\t\t\tparams.push(`-f${file}`);\n\t\t\t\t\tparams.push(text_trimmed);\n\t\t\t\t} else {\n\t\t\t\t\tparams.push(text);\n\t\t\t\t}\n\n\t\t\t\tlogger.info('FIGLET ' + params.join(' '));\n\n\t\t\t\tlet figlet = spawn('figlet', params);\n\n\t\t\t\tfiglet.stderr.on('data', data => client.tell(nick, data, ' '));\n\t\t\t\tfiglet.stdout.on('data', data => client.tell(nick, data, ' '));\n\t\t\t}\n\t\t});\n\n\t\tcowsay$.subscribe(message => {\n\t\t\tlet nick = message.args[0];\n\t\t\tlet text = message.args[1].substring(8).trim();\n\n\t\t\tif (text.length === 0) {\n\t\t\t\tclient.tell(nick, 'No text provided.');\n\t\t\t} else {\n\t\t\t\tlet params = [];\n\n\t\t\t\tif (/\\[[a-z_-]+\\] .+/i.test(text)) {\n\t\t\t\t\tlet [, file, text_trimmed] = text.match(/\\[([a-z_-]+)\\] (.+)/i);\n\n\t\t\t\t\tparams.push(`-f${file}`);\n\t\t\t\t\tparams.push(text_trimmed);\n\t\t\t\t} else {\n\t\t\t\t\tparams.push(text);\n\t\t\t\t}\n\n\t\t\t\tlogger.info('COWSAY ' + params.join(' '));\n\n\t\t\t\tlet cowsay = spawn('cowsay', params);\n\n\t\t\t\tcowsay.stderr.on('data', data => client.tell(nick, data, ' '));\n\t\t\t\tcowsay.stdout.on('data', data => client.tell(nick, data, ' '));\n\t\t\t}\n\t\t});\n\n\t\tfortune$.subscribe(message => {\n\t\t\tlogger.info('FORTUNE');\n\n\t\t\tlet nick = message.args[0];\n\n\t\t\tlet fortune = spawn('fortune');\n\n\t\t\tfortune.stderr.on('data', data => client.tell(nick, data, ' '));\n\t\t\tfortune.stdout.on('data', data => client.tell(nick, data, ' '));\n\t\t});\n\n\t\tfortunesay$.subscribe(message => {\n\t\t\tlogger.info('FORTUNESAY');\n\n\t\t\tlet nick = message.args[0];\n\n\t\t\tlet fortune = spawn('fortune');\n\t\t\tlet cowsay = spawn('cowsay');\n\n\t\t\tfortune.stdout.on('data', data => {\n\t\t\t\tcowsay.stdin.write(data);\n\t\t\t});\n\n\t\t\tfortune.stderr.on('data', data => client.tell(nick, data, ' '));\n\n\t\t\tfortune.on('close', (code) => {\n\t\t\t\tif (code !== 0) {\n\t\t\t\t\tlogger.error(`FORTUNESAY fortune exited with code ${code}`);\n\t\t\t\t}\n\t\t\t\tcowsay.stdin.end();\n\t\t\t});\n\n\t\t\tcowsay.stdout.on('data', data => client.tell(nick, data, ' '));\n\t\t\tcowsay.stderr.on('data', data => client.tell(nick, data, ' '));\n\n\t\t\tcowsay.on('close', (code) => {\n\t\t\t\tif (code !== 0) {\n\t\t\t\t\tlogger.error(`FORTUNESAY cowsay exited with code ${code}`);\n\t\t\t\t}\n\t\t\t});\n\t\t});\n\n\t\troll$.subscribe(message => {\n\t\t\tlet nick = message.args[0];\n\t\t\tlet dices = Number(message.args[1].substring(6).trim()) || 2;\n\n\t\t\tlet rolls = Array.from({ length: dices })\n\t\t\t\t.map(() => Math.ceil(Math.random() * 6))\n\t\t\t\t.map(number => `[${number}]`)\n\t\t\t\t.join(' ');\n\n\t\t\tlogger.info(`ROLL ${rolls}`);\n\n\t\t\tclient.tell(nick, rolls);\n\t\t});\n\t}\n};\n",
+    "static": true,
+    "longname": "/home/fkm/Development/GitHub/rx-irc/bot-fun/lib/module.js",
+    "access": "public",
+    "description": null,
+    "lineNumber": 1
+  },
+  {
+    "__docId__": 67,
+    "kind": "variable",
+    "name": "filter",
+    "memberof": "rx-irc/bot-fun/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-fun/lib/module.js~filter",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-fun/lib/module.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 3,
+    "undocument": true
+  },
+  {
+    "__docId__": 68,
+    "kind": "variable",
+    "name": "spawn",
+    "memberof": "rx-irc/bot-fun/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-fun/lib/module.js~spawn",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-fun/lib/module.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 5,
+    "undocument": true
+  },
+  {
+    "__docId__": 69,
+    "kind": "variable",
+    "name": "version",
+    "memberof": "rx-irc/bot-fun/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-fun/lib/module.js~version",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-fun/lib/module.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 10,
+    "undocument": true
+  },
+  {
+    "__docId__": 70,
+    "kind": "variable",
+    "name": "defaults",
+    "memberof": "rx-irc/bot-fun/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-fun/lib/module.js~defaults",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-fun/lib/module.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 12,
+    "undocument": true
+  },
+  {
+    "__docId__": 71,
+    "kind": "class",
+    "name": "FunModule",
+    "memberof": "rx-irc/bot-fun/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-fun/lib/module.js~FunModule",
+    "access": "public",
+    "export": true,
+    "importPath": "@rx-irc/bot/rx-irc/bot-fun/lib/module.js",
+    "importStyle": "FunModule",
+    "description": null,
+    "lineNumber": 14,
+    "undocument": true,
+    "interface": false
+  },
+  {
+    "__docId__": 72,
+    "kind": "constructor",
+    "name": "constructor",
+    "memberof": "rx-irc/bot-fun/lib/module.js~FunModule",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-fun/lib/module.js~FunModule#constructor",
+    "access": "public",
+    "description": "",
+    "lineNumber": 19,
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "ClientWrapper"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "client",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "object"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "options",
+        "description": ""
+      }
+    ]
+  },
+  {
+    "__docId__": 73,
+    "kind": "member",
+    "name": "settings",
+    "memberof": "rx-irc/bot-fun/lib/module.js~FunModule",
+    "static": false,
+    "longname": "rx-irc/bot-fun/lib/module.js~FunModule#settings",
+    "access": "public",
+    "description": null,
+    "lineNumber": 21,
+    "type": {
+      "nullable": null,
+      "types": [
+        "object"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 74,
+    "kind": "member",
+    "name": "version",
+    "memberof": "rx-irc/bot-fun/lib/module.js~FunModule",
+    "static": false,
+    "longname": "rx-irc/bot-fun/lib/module.js~FunModule#version",
+    "access": "public",
+    "description": null,
+    "lineNumber": 23,
+    "type": {
+      "nullable": null,
+      "types": [
+        "string"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 75,
+    "kind": "file",
+    "name": "rx-irc/bot-quiz/lib/convert-questions.js",
+    "content": "// Node Dependencies\nconst fs = require('fs');\nconst path = require('path');\n\n/** Delimiter string between metadata and questions. */\nconst HEADING_END = '<!========================================================!>';\n\n/**\n * @param {string} filename\n * @returns {object[]}\n */\nmodule.exports = function convertQuestions(filename) {\n\tlet questions = [{},]\n\n\tlet data = fs.readFileSync(path.join(__dirname, 'questions', filename + '.txt'), 'utf-8');\n\tlet lines = data.toString().split(HEADING_END)[1].split('\\n');\n\n\tlines.forEach(line => {\n\t\tif (/^\\w+:\\s+.+/.test(line)) {\n\t\t\tlet [, key, value] = line.match(/^(\\w+):\\s+(.+)/);\n\n\t\t\tquestions[questions.length - 1][key.toLowerCase()] = value;\n\t\t} else {\n\t\t\tquestions.push({});\n\t\t}\n\t});\n\n\tquestions = questions.filter(question => Object.keys(question).length > 0);\n\n\treturn questions;\n};\n",
+    "static": true,
+    "longname": "/home/fkm/Development/GitHub/rx-irc/bot-quiz/lib/convert-questions.js",
+    "access": "public",
+    "description": null,
+    "lineNumber": 1
+  },
+  {
+    "__docId__": 76,
+    "kind": "variable",
+    "name": "HEADING_END",
+    "memberof": "rx-irc/bot-quiz/lib/convert-questions.js",
+    "static": true,
+    "longname": "rx-irc/bot-quiz/lib/convert-questions.js~HEADING_END",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-quiz/lib/convert-questions.js",
+    "importStyle": null,
+    "description": "Delimiter string between metadata and questions.",
+    "lineNumber": 6
+  },
+  {
+    "__docId__": 77,
+    "kind": "function",
+    "name": "convertQuestions",
+    "memberof": "rx-irc/bot-quiz/lib/convert-questions.js",
+    "generator": false,
+    "async": false,
+    "static": true,
+    "longname": "rx-irc/bot-quiz/lib/convert-questions.js~convertQuestions",
+    "access": "public",
+    "export": true,
+    "importPath": "@rx-irc/bot/rx-irc/bot-quiz/lib/convert-questions.js",
+    "importStyle": "convertQuestions",
+    "description": "",
+    "lineNumber": 12,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{object[]}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "filename",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "object[]"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 78,
+    "kind": "file",
+    "name": "rx-irc/bot-quiz/lib/module.js",
+    "content": "// NPM Dependencies\nconst { merge } = require('rxjs');\nconst { filter, partition } = require('rxjs/operators');\nconst assert = require('assert');\n\n// Local Dependencies\nconst QuizGame = require('./quiz-game');\nconst { version } = require('../package.json');\n\nlet defaults = {};\n\nmodule.exports = class QuizModule {\n\t/**\n\t * @param {ClientWrapper} client\n\t * @param {object} options\n\t * @param {string} options.channel\n\t * @param {number} options.startDelay\n\t * @param {number} options.questionDelay\n\t * @param {number} options.hintInterval\n\t * @param {boolean} options.moderated\n\t */\n\tconstructor(client, options) {\n\t\tassert.strictEqual(typeof options.channel, 'string');\n\n\t\t//  ____                            _   _\n\t\t// |  _ \\ _ __ ___  _ __   ___ _ __| |_(_) ___  ___\n\t\t// | |_) | '__/ _ \\| '_ \\ / _ \\ '__| __| |/ _ \\/ __|\n\t\t// |  __/| | | (_) | |_) |  __/ |  | |_| |  __/\\__ \\\n\t\t// |_|   |_|  \\___/| .__/ \\___|_|   \\__|_|\\___||___/\n\t\t//                 |_|\n\t\t//\n\n\t\t/** @type {object} */\n\t\tthis.settings = { ...defaults, ...options };\n\t\t/** @type {string} */\n\t\tthis.version = version;\n\t\t/** @type {QuizGame} */\n\t\tthis.game = new QuizGame(client, this.settings);\n\n\t\t//  ____  _\n\t\t// / ___|| |_ _ __ ___  __ _ _ __ ___  ___\n\t\t// \\___ \\| __| '__/ _ \\/ _` | '_ ` _ \\/ __|\n\t\t//  ___) | |_| | |  __/ (_| | | | | | \\__ \\\n\t\t// |____/ \\__|_|  \\___|\\__,_|_| |_| |_|___/\n\t\t//\n\n\t\tlet channelRaw$ = client.raw$.pipe(\n\t\t\tfilter(message => message.args[0] === this.settings.channel || message.args[1] === this.settings.channel)\n\t\t);\n\n\t\tlet part$ = channelRaw$.pipe(\n\t\t\tfilter(message => message.command === 'PART')\n\t\t);\n\n\t\tlet quit$ = client.raw$.pipe(\n\t\t\tfilter(message => message.command === 'QUIT')\n\t\t);\n\n\t\tlet nick$ = client.raw$.pipe(\n\t\t\tfilter(message => message.command === 'NICK' && this.game.players.isPlayer(message.nick))\n\t\t);\n\n\t\tlet channel$ = channelRaw$.pipe(\n\t\t\tfilter(message => message.command === 'PRIVMSG')\n\t\t);\n\n\t\tlet bangHelp$ = channel$.pipe(\n\t\t\tfilter(message => message.args[1].startsWith('!help'))\n\t\t);\n\n\t\tlet bangScore$ = channel$.pipe(\n\t\t\tfilter(message => message.args[1].startsWith('!score'))\n\t\t);\n\n\t\tlet [player$, spectator$] = channel$.pipe(\n\t\t\tpartition(message => this.game.players.isPlayer(message.nick))\n\t\t);\n\n\t\tlet bangPlay$ = spectator$.pipe(\n\t\t\tfilter(message => message.args[1].startsWith('!play'))\n\t\t);\n\n\t\tlet guess$ = player$.pipe(\n\t\t\tfilter(message => message.args[1].charAt(0) !== '!')\n\t\t);\n\n\t\tlet bangQuit$ = player$.pipe(\n\t\t\tfilter(message => message.args[1].startsWith('!quit'))\n\t\t);\n\n\t\tlet bangRevolt$ = player$.pipe(\n\t\t\tfilter(message => message.args[1].startsWith('!revolt'))\n\t\t);\n\n\t\tlet goner$ = merge(bangQuit$, part$, quit$);\n\n\t\tlet playerGone$ = goner$.pipe(\n\t\t\tfilter(message => this.game.players.isPlayer(message.nick))\n\t\t);\n\n\t\t//  ____        _                   _       _   _\n\t\t// / ___| _   _| |__  ___  ___ _ __(_)_ __ | |_(_) ___  _ __  ___\n\t\t// \\___ \\| | | | '_ \\/ __|/ __| '__| | '_ \\| __| |/ _ \\| '_ \\/ __|\n\t\t//  ___) | |_| | |_) \\__ \\ (__| |  | | |_) | |_| | (_) | | | \\__ \\\n\t\t// |____/ \\__,_|_.__/|___/\\___|_|  |_| .__/ \\__|_|\\___/|_| |_|___/\n\t\t//                                   |_|\n\t\t//\n\n\t\tbangScore$.subscribe(message => this.game.tellScore());\n\t\tbangHelp$.subscribe(message => this.game.tellHelp(message.nick, message.args[1].substring(6)));\n\t\tbangPlay$.subscribe(message => this.game.addPlayer(message.nick));\n\t\tplayerGone$.subscribe(message => this.game.removePlayer(message.nick));\n\t\tnick$.subscribe(message => this.game.updatePlayer(message.nick, message.args[0]));\n\t\tguess$.subscribe(message => this.game.handleGuess(message.nick, message.args[1]));\n\t\tbangRevolt$.subscribe(message => this.game.handleRevolt(message.nick));\n\t}\n};\n",
+    "static": true,
+    "longname": "/home/fkm/Development/GitHub/rx-irc/bot-quiz/lib/module.js",
+    "access": "public",
+    "description": null,
+    "lineNumber": 1
+  },
+  {
+    "__docId__": 79,
+    "kind": "variable",
+    "name": "merge",
+    "memberof": "rx-irc/bot-quiz/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-quiz/lib/module.js~merge",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-quiz/lib/module.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 3,
+    "undocument": true
+  },
+  {
+    "__docId__": 80,
+    "kind": "variable",
+    "name": "filter",
+    "memberof": "rx-irc/bot-quiz/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-quiz/lib/module.js~filter",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-quiz/lib/module.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 5,
+    "undocument": true
+  },
+  {
+    "__docId__": 81,
+    "kind": "variable",
+    "name": "version",
+    "memberof": "rx-irc/bot-quiz/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-quiz/lib/module.js~version",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-quiz/lib/module.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 11,
+    "undocument": true
+  },
+  {
+    "__docId__": 82,
+    "kind": "variable",
+    "name": "defaults",
+    "memberof": "rx-irc/bot-quiz/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-quiz/lib/module.js~defaults",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-quiz/lib/module.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 13,
+    "undocument": true
+  },
+  {
+    "__docId__": 83,
+    "kind": "class",
+    "name": "QuizModule",
+    "memberof": "rx-irc/bot-quiz/lib/module.js",
+    "static": true,
+    "longname": "rx-irc/bot-quiz/lib/module.js~QuizModule",
+    "access": "public",
+    "export": true,
+    "importPath": "@rx-irc/bot/rx-irc/bot-quiz/lib/module.js",
+    "importStyle": "QuizModule",
+    "description": null,
+    "lineNumber": 15,
+    "undocument": true,
+    "interface": false
+  },
+  {
+    "__docId__": 84,
+    "kind": "constructor",
+    "name": "constructor",
+    "memberof": "rx-irc/bot-quiz/lib/module.js~QuizModule",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/module.js~QuizModule#constructor",
+    "access": "public",
+    "description": "",
+    "lineNumber": 25,
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "ClientWrapper"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "client",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "object"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "options",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "options.channel",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "number"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "options.startDelay",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "number"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "options.questionDelay",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "number"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "options.hintInterval",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "boolean"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "options.moderated",
+        "description": ""
+      }
+    ]
+  },
+  {
+    "__docId__": 85,
+    "kind": "member",
+    "name": "settings",
+    "memberof": "rx-irc/bot-quiz/lib/module.js~QuizModule",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/module.js~QuizModule#settings",
+    "access": "public",
+    "description": null,
+    "lineNumber": 37,
+    "type": {
+      "nullable": null,
+      "types": [
+        "object"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 86,
+    "kind": "member",
+    "name": "version",
+    "memberof": "rx-irc/bot-quiz/lib/module.js~QuizModule",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/module.js~QuizModule#version",
+    "access": "public",
+    "description": null,
+    "lineNumber": 39,
+    "type": {
+      "nullable": null,
+      "types": [
+        "string"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 87,
+    "kind": "member",
+    "name": "game",
+    "memberof": "rx-irc/bot-quiz/lib/module.js~QuizModule",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/module.js~QuizModule#game",
+    "access": "public",
+    "description": null,
+    "lineNumber": 41,
+    "type": {
+      "nullable": null,
+      "types": [
+        "QuizGame"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 88,
+    "kind": "file",
+    "name": "rx-irc/bot-quiz/lib/quiz-game.js",
+    "content": "// NPM Dependencies\nconst assert = require('assert');\nconst colors = require('irc-colors');\n\n// Local Dependencies\nconst QuizPlayers = require('./quiz-players');\nconst QuizQuestion = require('./quiz-question');\nconst QuizQuestions = require('./quiz-questions');\nconst QuizHelp = require('./quiz-help');\n\n/**\n * @type {Object}\n * @property {string} prefix='[Qz]'\n * @property {number} startDelay=10000\n * @property {number} questionDelay=5000\n * @property {number} hintInterval=5000\n * @property {boolean} moderated=true\n * @property {boolean} hintsUseCache=false\n * @property {string} logLevel='error'\n */\nlet defaults = {\n\tprefix: '[Qz]',\n\tstartDelay: 10000,\n\tquestionDelay: 5000,\n\thintInterval: 5000,\n\tmoderated: true,\n\thintsUseCache: false,\n\tlogLevel: 'error',\n};\n\nmodule.exports = class QuizGame {\n\t/**\n\t * @param {Client} client\n\t * @param {object} options\n \t * @returns {void}\n\t */\n\tconstructor(client, options) {\n\t\tassert.strictEqual(typeof options.channel, 'string');\n\n\t\t/** @type {Client} */\n\t\tthis.client = client;\n\t\t/** @type {object} */\n\t\tthis.settings = { ...defaults, ...options };\n\n\t\t/** @type {QuizPlayers} */\n\t\tthis.players = new QuizPlayers();\n\t\t/** @type {QuizQuestions} */\n\t\tthis.questions = new QuizQuestions();\n\t\t/** @type {QuizHelp} */\n\t\tthis.help = new QuizHelp({ useCache: this.settings.hintsUseCache });\n\n\t\t/** @type {boolean} */\n\t\tthis.gameActive = false;\n\t\t/** @type {number} */\n\t\tthis.startTimeoutId = null;\n\t\t/** @type {QuizQuestion} */\n\t\tthis.currentChallenge = null;\n\t\t/** @type {number} */\n\t\tthis.challengeTimeoutId = null;\n\t\t/** @type {number} */\n\t\tthis.hintIntervalId = null;\n\t}\n\n\t/**\n\t * @param {string} nick\n \t * @returns {void}\n\t */\n\taddPlayer(nick) {\n\t\tif (!this.players.isPlayer(nick)) {\n\t\t\tif (this.gameActive) {\n\t\t\t\tthis.notify(nick, `Game is already running.`);\n\t\t\t} else {\n\t\t\t\tif (this.settings.moderated) {\n\t\t\t\t\tthis.sendModes(this.settings.channel, '+v', nick);\n\t\t\t\t}\n\n\t\t\t\tthis.tellToChannel(`Player ${nick} has joined the game.`);\n\t\t\t\tthis.players.addPlayer(nick);\n\n\t\t\t\tif (this.players.nickList.length === 2) {\n\t\t\t\t\tthis.tellToChannel('Enough players found for new game.');\n\t\t\t\t\tthis.beginGame();\n\t\t\t\t} else if (this.players.nickList.length > 2) {\n\t\t\t\t\tthis.tellToChannel('Additional player joined the game.');\n\t\t\t\t\tthis.beginGame();\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n\n\t/**\n\t * @param {string} nick\n\t * @returns {void}\n\t */\n\tremovePlayer(nick) {\n\t\tif (this.players.isPlayer(nick)) {\n\t\t\tif (this.settings.moderated) {\n\t\t\t\tthis.sendModes(this.settings.channel, '-v', nick);\n\t\t\t}\n\n\t\t\tthis.tellToChannel(`Player ${nick} has quit the game.`);\n\t\t\tthis.players.removePlayer(nick);\n\n\t\t\tif (this.players.nickList.length === 1) {\n\t\t\t\tclearTimeout(this.startTimeoutId);\n\n\t\t\t\tif (this.gameActive) {\n\t\t\t\t\tthis.finishChallenge();\n\t\t\t\t\tthis.endGame(`Last man standing.`);\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n\n\t/**\n\t * @param {string} oldnick\n\t * @param {string} newnick\n\t * @returns {void}\n\t */\n\tupdatePlayer(oldnick, newnick) {\n\t\tif (this.players.isPlayer(oldnick)) {\n\t\t\tthis.players.updatePlayer(oldnick, newnick);\n\t\t}\n\t}\n\n\t/**\n\t * @returns {void}\n\t */\n\tbeginGame() {\n\t\tthis.tellToChannel(`Game starting in ${this.settings.startDelay / 1000} seconds.`);\n\n\t\tclearTimeout(this.startTimeoutId);\n\t\tthis.startTimeoutId = setTimeout(() => {\n\t\t\tlet title = colors.inverse(` GAME STARTS `);\n\n\t\t\tthis.gameActive = true;\n\n\t\t\tthis.questions.load('de-quake', 10);\n\n\t\t\tif (this.settings.moderated) {\n\t\t\t\tthis.sendModes(this.settings.channel, '+m');\n\t\t\t}\n\n\t\t\tthis.tellToChannel(title);\n\t\t\tthis.tellToChannel(\n\t\t\t\t'Total questions: ' + this.questions.total + '; ' +\n\t\t\t\t'Using: ' + this.questions.current.length + '; ' +\n\t\t\t\t'Remaining: ' + this.questions.remaining.length\n\t\t\t);\n\t\t\tthis.tellToChannel('Players: ' + this.players.nickList.join(', '));\n\n\t\t\tthis.nextChallenge();\n\t\t}, this.settings.startDelay);\n\t}\n\n\t/**\n\t * @param {string} reason\n\t * @returns {void}\n\t */\n\tendGame(reason) {\n\t\tlet title = colors.inverse(` GAME OVER `);\n\n\t\tclearTimeout(this.startTimeoutId);\n\t\tclearInterval(this.hintIntervalId);\n\n\t\tif (this.gameActive) {\n\t\t\tthis.tellToChannel(`${title} ${reason}`);\n\n\t\t\tthis.tellScore();\n\t\t\tthis.gameActive = false;\n\n\t\t\tthis.tellToChannel(`Thank you for playing.`);\n\n\t\t\tif (this.settings.moderated) {\n\t\t\t\tthis.sendModes(this.settings.channel, '-m');\n\n\t\t\t\tthis.players.nickList.forEach(nick => {\n\t\t\t\t\tthis.sendModes(this.settings.channel, '-v', nick);\n\t\t\t\t});\n\t\t\t}\n\n\t\t\tthis.players.removeAllPlayers();\n\t\t}\n\t}\n\n\t//   ____ _           _ _\n\t//  / ___| |__   __ _| | | ___ _ __   __ _  ___\n\t// | |   | '_ \\ / _` | | |/ _ \\ '_ \\ / _` |/ _ \\\n\t// | |___| | | | (_| | | |  __/ | | | (_| |  __/\n\t//  \\____|_| |_|\\__,_|_|_|\\___|_| |_|\\__, |\\___|\n\t//                                   |___/\n\t//\n\n\t/**\n\t * @returns {void}\n\t */\n\tnextChallenge() {\n\t\tif (this.gameActive) {\n\t\t\tif (this.currentChallenge !== null) {\n\t\t\t\t// Finish current challenge first.\n\t\t\t} else if (this.challengeTimeoutId !== null) {\n\t\t\t\t// Next challenge already initialized.\n\t\t\t} else if (this.questions.current.length === 0) {\n\t\t\t\tthis.endGame(`No more questions.`);\n\t\t\t} else {\n\t\t\t\tthis.challengeTimeoutId = setTimeout(() => {\n\t\t\t\t\tlet title = colors.inverse(` NEW QUESTION `);\n\n\t\t\t\t\tthis.challengeTimeoutId = null;\n\n\t\t\t\t\tthis.currentChallenge = new QuizQuestion(this.questions.pop());\n\n\t\t\t\t\tthis.tellToChannel(`${title} ${this.questions.currentLimit - this.questions.current.length} / ${this.questions.currentLimit}`);\n\t\t\t\t\tthis.tellToChannel(this.currentChallenge.question);\n\t\t\t\t\tthis.tellToChannel(this.currentChallenge.hintPlaceholder);\n\n\t\t\t\t\tclearInterval(this.hintIntervalId);\n\t\t\t\t\tthis.hintIntervalId = setInterval(\n\t\t\t\t\t\t() => this.giveHint(),\n\t\t\t\t\t\tthis.settings.hintInterval\n\t\t\t\t\t);\n\t\t\t\t}, this.settings.questionDelay);\n\t\t\t}\n\t\t}\n\t}\n\n\t/**\n\t * @param {string} winner\n\t * @returns {void}\n\t */\n\tfinishChallenge(winner) {\n\t\tlet title = colors.inverse(` QUESTION END `);\n\n\t\tclearInterval(this.hintIntervalId);\n\n\t\tthis.players.resetRevoltees();\n\n\t\tlet message;\n\n\t\tif (winner) {\n\t\t\tthis.players.increaseScore(winner);\n\t\t\tmessage = `${winner} had the correct answer!`;\n\t\t} else {\n\t\t\tmessage = `The question went unanswered.`;\n\t\t}\n\n\t\tthis.tellToChannel(`${title} ${message}`);\n\t\tthis.tellToChannel(`Question: ${this.currentChallenge.question}`);\n\t\tthis.tellToChannel(`Answer: ${this.currentChallenge.hintString}`);\n\n\t\tthis.tellScore();\n\n\t\tthis.currentChallenge = null;\n\t}\n\n\t/**\n\t * @param {string} nick\n\t * @returns {void}\n\t */\n\thandleRevolt(nick) {\n\t\tif (this.currentChallenge !== null) {\n\t\t\tif (this.players.isRevolting(nick)) {\n\t\t\t\tthis.notify(nick, `You are already revolting.`);\n\t\t\t} else if (this.currentChallenge.hintsGiven < 1) {\n\t\t\t\tthis.tellToChannel(`Revolting is only possible after the first hint.`);\n\t\t\t} else {\n\t\t\t\tthis.players.setRevoltee(nick);\n\t\t\t\tthis.tellToChannel(`${nick} is revolting!`);\n\n\t\t\t\tif (this.players.getRevoltees().length > this.players.nickList.length / 2) {\n\t\t\t\t\tthis.tellToChannel(`Revolt successful. The quiz master gives in.`);\n\t\t\t\t\tthis.finishChallenge();\n\t\t\t\t\tthis.nextChallenge();\n\t\t\t\t} else {\n\t\t\t\t\tthis.tellToChannel(`The mob is negligible. The quiz master is not impressed.`)\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n\n\t/**\n\t * @param {string} nick\n\t * @param {string} guess\n\t * @returns {void}\n\t */\n\thandleGuess(nick, guess) {\n\t\tif (this.currentChallenge !== null) {\n\t\t\tif (this.currentChallenge.checkGuess(guess)) {\n\t\t\t\tthis.finishChallenge(nick);\n\t\t\t\tthis.nextChallenge();\n\t\t\t}\n\t\t}\n\t}\n\n\t/**\n\t * @returns {void}\n\t */\n\tgiveHint() {\n\t\tif (this.currentChallenge === null) {\n\n\t\t} else if (this.currentChallenge.hintArray.length < 2) {\n\t\t\tthis.finishChallenge();\n\t\t\tthis.nextChallenge();\n\t\t} else {\n\t\t\tthis.currentChallenge.addHint();\n\t\t\tthis.tellToChannel(this.currentChallenge.question);\n\t\t\tthis.tellToChannel(this.currentChallenge.hintPlaceholder);\n\t\t}\n\t}\n\n\t//  _____     _ _\n\t// |_   _|_ _| | | __\n\t//   | |/ _` | | |/ /\n\t//   | | (_| | |   <\n\t//   |_|\\__,_|_|_|\\_\\\n\t//\n\n\t/**\n\t * @returns {void}\n\t */\n\tsendModes() {\n\t\tlet args = Array.from(arguments);\n\t\targs.unshift('MODE');\n\n\t\tthis.client.lib.send.apply(this.client.lib, args);\n\t}\n\n\t/**\n\t * @param {string} message\n\t * @returns {void}\n\t */\n\ttellToChannel(message) {\n\t\tthis.client.tell(this.settings.channel, message, this.settings.prefix);\n\t}\n\n\t/**\n\t* @param {string} target\n\t* @param {string} message\n\t * @returns {void}\n\t */\n\tnotify(target, message) {\n\t\tthis.client.notify(target, message, this.settings.prefix);\n\t}\n\n\t/**\n\t * @param {string[]} multiline\n\t * @returns {void}\n\t */\n\ttellScore(multiline) {\n\t\tlet title = colors.inverse(` SCORE `);\n\t\tlet output = [];\n\n\t\tif (this.gameActive) {\n\t\t\tlet ranking = this.players.getRanking().map(player => {\n\t\t\t\treturn `${player.position}. ${player.nick} (${player.score})`;\n\t\t\t});\n\n\t\t\tif (multiline) {\n\t\t\t\toutput.push(`${title}`);\n\t\t\t\toutput.concat(ranking);\n\t\t\t} else {\n\t\t\t\toutput.push(`${title} ${ranking.join(', ')}`);\n\t\t\t}\n\t\t} else {\n\t\t\toutput.push(`${title} No active game.`);\n\t\t}\n\n\t\tthis.tellToChannel(output);\n\t}\n\n\t/**\n\t * @param {string} target\n\t * @param {string} category\n\t * @returns {void}\n\t */\n\ttellHelp(target, category) {\n\t\tthis.notify(target, this.help.getArray(category));\n\t}\n};\n",
+    "static": true,
+    "longname": "/home/fkm/Development/GitHub/rx-irc/bot-quiz/lib/quiz-game.js",
+    "access": "public",
+    "description": null,
+    "lineNumber": 1
+  },
+  {
+    "__docId__": 89,
+    "kind": "variable",
+    "name": "defaults",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js",
+    "static": true,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~defaults",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-quiz/lib/quiz-game.js",
+    "importStyle": null,
+    "description": "",
+    "lineNumber": 21,
+    "properties": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "'[Qz]'",
+        "defaultRaw": "'[Qz]'",
+        "name": "prefix",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "number"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "10000",
+        "defaultRaw": 10000,
+        "name": "startDelay",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "number"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "5000",
+        "defaultRaw": 5000,
+        "name": "questionDelay",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "number"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "5000",
+        "defaultRaw": 5000,
+        "name": "hintInterval",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "boolean"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "true",
+        "defaultRaw": true,
+        "name": "moderated",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "boolean"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "false",
+        "defaultRaw": false,
+        "name": "hintsUseCache",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "'error'",
+        "defaultRaw": "'error'",
+        "name": "logLevel",
+        "description": ""
+      }
+    ],
+    "type": {
+      "nullable": null,
+      "types": [
+        "Object"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 90,
+    "kind": "class",
+    "name": "QuizGame",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js",
+    "static": true,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "access": "public",
+    "export": true,
+    "importPath": "@rx-irc/bot/rx-irc/bot-quiz/lib/quiz-game.js",
+    "importStyle": "QuizGame",
+    "description": null,
+    "lineNumber": 31,
+    "undocument": true,
+    "interface": false
+  },
+  {
+    "__docId__": 91,
+    "kind": "constructor",
+    "name": "constructor",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#constructor",
+    "access": "public",
+    "description": "",
+    "lineNumber": 37,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "Client"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "client",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "object"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "options",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 92,
+    "kind": "member",
+    "name": "client",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#client",
+    "access": "public",
+    "description": null,
+    "lineNumber": 41,
+    "type": {
+      "nullable": null,
+      "types": [
+        "Client"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 93,
+    "kind": "member",
+    "name": "settings",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#settings",
+    "access": "public",
+    "description": null,
+    "lineNumber": 43,
+    "type": {
+      "nullable": null,
+      "types": [
+        "object"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 94,
+    "kind": "member",
+    "name": "players",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#players",
+    "access": "public",
+    "description": null,
+    "lineNumber": 46,
+    "type": {
+      "nullable": null,
+      "types": [
+        "QuizPlayers"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 95,
+    "kind": "member",
+    "name": "questions",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#questions",
+    "access": "public",
+    "description": null,
+    "lineNumber": 48,
+    "type": {
+      "nullable": null,
+      "types": [
+        "QuizQuestions"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 96,
+    "kind": "member",
+    "name": "help",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#help",
+    "access": "public",
+    "description": null,
+    "lineNumber": 50,
+    "type": {
+      "nullable": null,
+      "types": [
+        "QuizHelp"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 97,
+    "kind": "member",
+    "name": "gameActive",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#gameActive",
+    "access": "public",
+    "description": null,
+    "lineNumber": 53,
+    "type": {
+      "nullable": null,
+      "types": [
+        "boolean"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 98,
+    "kind": "member",
+    "name": "startTimeoutId",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#startTimeoutId",
+    "access": "public",
+    "description": null,
+    "lineNumber": 55,
+    "type": {
+      "nullable": null,
+      "types": [
+        "number"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 99,
+    "kind": "member",
+    "name": "currentChallenge",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#currentChallenge",
+    "access": "public",
+    "description": null,
+    "lineNumber": 57,
+    "type": {
+      "nullable": null,
+      "types": [
+        "QuizQuestion"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 100,
+    "kind": "member",
+    "name": "challengeTimeoutId",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#challengeTimeoutId",
+    "access": "public",
+    "description": null,
+    "lineNumber": 59,
+    "type": {
+      "nullable": null,
+      "types": [
+        "number"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 101,
+    "kind": "member",
+    "name": "hintIntervalId",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#hintIntervalId",
+    "access": "public",
+    "description": null,
+    "lineNumber": 61,
+    "type": {
+      "nullable": null,
+      "types": [
+        "number"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 102,
+    "kind": "method",
+    "name": "addPlayer",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#addPlayer",
+    "access": "public",
+    "description": "",
+    "lineNumber": 68,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "nick",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 103,
+    "kind": "method",
+    "name": "removePlayer",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#removePlayer",
+    "access": "public",
+    "description": "",
+    "lineNumber": 95,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "nick",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 104,
+    "kind": "method",
+    "name": "updatePlayer",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#updatePlayer",
+    "access": "public",
+    "description": "",
+    "lineNumber": 120,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "oldnick",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "newnick",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 105,
+    "kind": "method",
+    "name": "beginGame",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#beginGame",
+    "access": "public",
+    "description": "",
+    "lineNumber": 129,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 108,
+    "kind": "method",
+    "name": "endGame",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#endGame",
+    "access": "public",
+    "description": "",
+    "lineNumber": 160,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "reason",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 110,
+    "kind": "method",
+    "name": "nextChallenge",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#nextChallenge",
+    "access": "public",
+    "description": "",
+    "lineNumber": 197,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 115,
+    "kind": "method",
+    "name": "finishChallenge",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#finishChallenge",
+    "access": "public",
+    "description": "",
+    "lineNumber": 231,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "winner",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 117,
+    "kind": "method",
+    "name": "handleRevolt",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#handleRevolt",
+    "access": "public",
+    "description": "",
+    "lineNumber": 260,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "nick",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 118,
+    "kind": "method",
+    "name": "handleGuess",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#handleGuess",
+    "access": "public",
+    "description": "",
+    "lineNumber": 286,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "nick",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "guess",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 119,
+    "kind": "method",
+    "name": "giveHint",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#giveHint",
+    "access": "public",
+    "description": "",
+    "lineNumber": 298,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 120,
+    "kind": "method",
+    "name": "sendModes",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#sendModes",
+    "access": "public",
+    "description": "",
+    "lineNumber": 321,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 121,
+    "kind": "method",
+    "name": "tellToChannel",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#tellToChannel",
+    "access": "public",
+    "description": "",
+    "lineNumber": 332,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "message",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 122,
+    "kind": "method",
+    "name": "notify",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#notify",
+    "access": "public",
+    "description": "",
+    "lineNumber": 341,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "target",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "message",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 123,
+    "kind": "method",
+    "name": "tellScore",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#tellScore",
+    "access": "public",
+    "description": "",
+    "lineNumber": 349,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string[]"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "multiline",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 124,
+    "kind": "method",
+    "name": "tellHelp",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-game.js~QuizGame#tellHelp",
+    "access": "public",
+    "description": "",
+    "lineNumber": 376,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "target",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "category",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 125,
+    "kind": "file",
+    "name": "rx-irc/bot-quiz/lib/quiz-help.js",
+    "content": "// Node Dependencies\nconst fs = require('fs');\nconst path = require('path');\n\n/**\n * @param {string} filename\n * @returns {string}\n */\nfunction readFile(filename) {\n\treturn fs.readFileSync(filename, 'utf-8').toString();\n}\n\n/**\n * @type {Object}\n * @property {boolean} useCache=true\n */\nlet defaults = {\n\tuseCache: true,\n};\n\nmodule.exports = class QuizHelp {\n\t/**\n\t * @param {object} options\n\t * @returns {void}\n\t */\n\tconstructor(options) {\n\t\t/** @type {object} */\n\t\tthis.settings = { ...defaults, ...options };\n\n\t\tthis.cache = {};\n\t}\n\n\t/**\n\t * @param {string} [category]\n\t * @returns {string}\n\t */\n\tget(category) {\n\t\tcategory = category && category.length > 0 ? category : 'index';\n\n\t\tlet help;\n\n\t\tif (category in this.cache) {\n\t\t\treturn this.cache[category];\n\t\t}\n\n\t\ttry {\n\t\t\tif (/^[a-z]+$/i.test(category)) {\n\t\t\t\tlet file_path = path.join(__dirname, 'help', `${category}.txt`);\n\t\t\t\thelp = readFile(file_path).replace(/(\\r?\\n?)*$/, '');\n\n\t\t\t\tif (this.settings.useCache) {\n\t\t\t\t\tthis.cache[category] = help;\n\t\t\t\t}\n\t\t\t} else {\n\t\t\t\thelp = `Invalid category name. Only characters from A to Z are allowed.`;\n\t\t\t}\n\t\t} catch (error) {\n\t\t\thelp = `Could not open help. ${error}`;\n\t\t}\n\n\t\treturn help;\n\t}\n\n\t/**\n\t * @param {string} [category]\n\t * @returns {string}\n\t */\n\tgetArray(category) {\n\t\treturn this.get(category).split('\\n');\n\t}\n};\n",
+    "static": true,
+    "longname": "/home/fkm/Development/GitHub/rx-irc/bot-quiz/lib/quiz-help.js",
+    "access": "public",
+    "description": null,
+    "lineNumber": 1
+  },
+  {
+    "__docId__": 126,
+    "kind": "function",
+    "name": "readFile",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-help.js",
+    "generator": false,
+    "async": false,
+    "static": true,
+    "longname": "rx-irc/bot-quiz/lib/quiz-help.js~readFile",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-quiz/lib/quiz-help.js",
+    "importStyle": null,
+    "description": "",
+    "lineNumber": 9,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{string}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "filename",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "string"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 127,
+    "kind": "variable",
+    "name": "defaults",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-help.js",
+    "static": true,
+    "longname": "rx-irc/bot-quiz/lib/quiz-help.js~defaults",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-quiz/lib/quiz-help.js",
+    "importStyle": null,
+    "description": "",
+    "lineNumber": 17,
+    "properties": [
+      {
+        "nullable": null,
+        "types": [
+          "boolean"
+        ],
+        "spread": false,
+        "optional": false,
+        "defaultValue": "true",
+        "defaultRaw": true,
+        "name": "useCache",
+        "description": ""
+      }
+    ],
+    "type": {
+      "nullable": null,
+      "types": [
+        "Object"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 128,
+    "kind": "class",
+    "name": "QuizHelp",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-help.js",
+    "static": true,
+    "longname": "rx-irc/bot-quiz/lib/quiz-help.js~QuizHelp",
+    "access": "public",
+    "export": true,
+    "importPath": "@rx-irc/bot/rx-irc/bot-quiz/lib/quiz-help.js",
+    "importStyle": "QuizHelp",
+    "description": null,
+    "lineNumber": 21,
+    "undocument": true,
+    "interface": false
+  },
+  {
+    "__docId__": 129,
+    "kind": "constructor",
+    "name": "constructor",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-help.js~QuizHelp",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-help.js~QuizHelp#constructor",
+    "access": "public",
+    "description": "",
+    "lineNumber": 26,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "object"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "options",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 130,
+    "kind": "member",
+    "name": "settings",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-help.js~QuizHelp",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-help.js~QuizHelp#settings",
+    "access": "public",
+    "description": null,
+    "lineNumber": 28,
+    "type": {
+      "nullable": null,
+      "types": [
+        "object"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 131,
+    "kind": "member",
+    "name": "cache",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-help.js~QuizHelp",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-help.js~QuizHelp#cache",
+    "access": "public",
+    "description": null,
+    "lineNumber": 30,
+    "undocument": true
+  },
+  {
+    "__docId__": 132,
+    "kind": "method",
+    "name": "get",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-help.js~QuizHelp",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-help.js~QuizHelp#get",
+    "access": "public",
+    "description": "",
+    "lineNumber": 37,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{string}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": true,
+        "name": "category",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "string"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 133,
+    "kind": "method",
+    "name": "getArray",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-help.js~QuizHelp",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-help.js~QuizHelp#getArray",
+    "access": "public",
+    "description": "",
+    "lineNumber": 68,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{string}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": true,
+        "name": "category",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "string"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 134,
+    "kind": "file",
+    "name": "rx-irc/bot-quiz/lib/quiz-players.js",
+    "content": "module.exports = class QuizPlayers {\n\t/**\n\t * @returns {void}\n\t */\n\tconstructor() {\n\t\t/** @type {object} */\n\t\tthis.players = {};\n\t}\n\n\t/**\n\t * @returns {string[]}\n\t */\n\tget nickList() {\n\t\treturn Object.keys(this.players);\n\t}\n\n\t/**\n\t * @returns {object[]}\n\t */\n\tcalculateRanking() {\n\t\tlet ranking = this.nickList.sort(\n\t\t\t(a, b) => this.players[a].score - this.players[b].score\n\t\t);\n\n\t\tranking.reverse();\n\n\t\treturn ranking;\n\t}\n\n\t/**\n\t * @returns {object[]}\n\t */\n\tgetRanking() {\n\t\tlet ranking = this.calculateRanking();\n\n\t\tranking = ranking.map((nick, index) => {\n\t\t\treturn {\n\t\t\t\tnick: nick,\n\t\t\t\tposition: index + 1,\n\t\t\t\tscore: this.players[nick].score\n\t\t\t};\n\t\t});\n\n\t\treturn ranking;\n\t};\n\n\t/**\n\t * @returns {object}\n\t */\n\tgetWinner() {\n\t\treturn this.calculateRanking()[0];\n\t};\n\n\t/**\n\t * @param {string} nick\n\t * @param {number} [score=1]\n\t * @returns {object[]}\n\t */\n\tincreaseScore(nick, score = 1) {\n\t\tif (this.isPlayer(nick)) {\n\t\t\tthis.players[nick].score += score;\n\t\t}\n\t};\n\n\t/**\n\t * @param {string} nick\n\t * @returns {boolean}\n\t */\n\tisPlayer(nick) {\n\t\treturn nick in this.players;\n\t};\n\n\t/**\n\t * @param {string} nick\n\t * @returns {boolean}\n\t */\n\tisRevolting(nick) {\n\t\treturn this.isPlayer(nick) && this.players[nick].isRevolting;\n\t};\n\n\t/**\n\t * @param {string} nick\n\t * @returns {void}\n\t */\n\taddPlayer(nick) {\n\t\tthis.players[nick] = { score: 0, isRevolting: false };\n\t};\n\n\t/**\n\t * @param {string} nick\n\t * @returns {void}\n\t */\n\tremovePlayer(nick) {\n\t\tif (this.isPlayer(nick)) {\n\t\t\tdelete this.players[nick];\n\t\t}\n\t};\n\n\t/**\n\t * @returns {void}\n\t */\n\tremoveAllPlayers() {\n\t\tthis.players = {};\n\t};\n\n\t/**\n\t * @param {string} oldnick\n\t * @param {string} newnick\n\t * @returns {void}\n\t */\n\tupdatePlayer(oldnick, newnick) {\n\t\tthis.players[newnick] = this.players[oldnick];\n\t\tdelete this.players[oldnick];\n\t};\n\n\t/**\n\t * @param {string} nick\n\t * @returns {void}\n\t */\n\tsetRevoltee(nick) {\n\t\tthis.players[nick].isRevolting = true;\n\t};\n\n\t/**\n\t * @returns {string[]}\n\t */\n\tgetRevoltees() {\n\t\treturn this.nickList.filter(nick => {\n\t\t\treturn this.players[nick].isRevolting;\n\t\t});\n\t};\n\n\t/**\n\t * @returns {void}\n\t */\n\tresetRevoltees() {\n\t\tthis.nickList.forEach(nick => {\n\t\t\tthis.players[nick].isRevolting = false;\n\t\t});\n\t};\n};\n",
+    "static": true,
+    "longname": "/home/fkm/Development/GitHub/rx-irc/bot-quiz/lib/quiz-players.js",
+    "access": "public",
+    "description": null,
+    "lineNumber": 1
+  },
+  {
+    "__docId__": 135,
+    "kind": "class",
+    "name": "QuizPlayers",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-players.js",
+    "static": true,
+    "longname": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers",
+    "access": "public",
+    "export": true,
+    "importPath": "@rx-irc/bot/rx-irc/bot-quiz/lib/quiz-players.js",
+    "importStyle": "QuizPlayers",
+    "description": null,
+    "lineNumber": 1,
+    "undocument": true,
+    "interface": false
+  },
+  {
+    "__docId__": 136,
+    "kind": "constructor",
+    "name": "constructor",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers#constructor",
+    "access": "public",
+    "description": "",
+    "lineNumber": 5,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 137,
+    "kind": "member",
+    "name": "players",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers#players",
+    "access": "public",
+    "description": null,
+    "lineNumber": 7,
+    "type": {
+      "nullable": null,
+      "types": [
+        "object"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 138,
+    "kind": "get",
+    "name": "nickList",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers#nickList",
+    "access": "public",
+    "description": "",
+    "lineNumber": 13,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{string[]}"
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "string[]"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 139,
+    "kind": "method",
+    "name": "calculateRanking",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers#calculateRanking",
+    "access": "public",
+    "description": "",
+    "lineNumber": 20,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{object[]}"
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "object[]"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 140,
+    "kind": "method",
+    "name": "getRanking",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers#getRanking",
+    "access": "public",
+    "description": "",
+    "lineNumber": 33,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{object[]}"
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "object[]"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 141,
+    "kind": "method",
+    "name": "getWinner",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers#getWinner",
+    "access": "public",
+    "description": "",
+    "lineNumber": 50,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{object}"
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "object"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 142,
+    "kind": "method",
+    "name": "increaseScore",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers#increaseScore",
+    "access": "public",
+    "description": "",
+    "lineNumber": 59,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{object[]}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "nick",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "number"
+        ],
+        "spread": false,
+        "optional": true,
+        "defaultValue": "1",
+        "defaultRaw": 1,
+        "name": "score",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "object[]"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 143,
+    "kind": "method",
+    "name": "isPlayer",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers#isPlayer",
+    "access": "public",
+    "description": "",
+    "lineNumber": 69,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{boolean}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "nick",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "boolean"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 144,
+    "kind": "method",
+    "name": "isRevolting",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers#isRevolting",
+    "access": "public",
+    "description": "",
+    "lineNumber": 77,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{boolean}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "nick",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "boolean"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 145,
+    "kind": "method",
+    "name": "addPlayer",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers#addPlayer",
+    "access": "public",
+    "description": "",
+    "lineNumber": 85,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "nick",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 146,
+    "kind": "method",
+    "name": "removePlayer",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers#removePlayer",
+    "access": "public",
+    "description": "",
+    "lineNumber": 93,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "nick",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 147,
+    "kind": "method",
+    "name": "removeAllPlayers",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers#removeAllPlayers",
+    "access": "public",
+    "description": "",
+    "lineNumber": 102,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 149,
+    "kind": "method",
+    "name": "updatePlayer",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers#updatePlayer",
+    "access": "public",
+    "description": "",
+    "lineNumber": 111,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "oldnick",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "newnick",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 150,
+    "kind": "method",
+    "name": "setRevoltee",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers#setRevoltee",
+    "access": "public",
+    "description": "",
+    "lineNumber": 120,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "nick",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 151,
+    "kind": "method",
+    "name": "getRevoltees",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers#getRevoltees",
+    "access": "public",
+    "description": "",
+    "lineNumber": 127,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{string[]}"
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "string[]"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 152,
+    "kind": "method",
+    "name": "resetRevoltees",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers#resetRevoltees",
+    "access": "public",
+    "description": "",
+    "lineNumber": 136,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 153,
+    "kind": "file",
+    "name": "rx-irc/bot-quiz/lib/quiz-question.js",
+    "content": "// NPM Dependencies\nconst assert = require('assert');\nconst { knuthShuffle } = require('knuth-shuffle');\n\nmodule.exports = class QuizQuestion {\n\t/**\n\t * @param {object} data\n \t * @returns {void}\n\t */\n\tconstructor(data) {\n\t\tassert.strictEqual(typeof data.question, 'string', 'No question provided.');\n\t\tassert.strictEqual(typeof data.answer,   'string', 'No answer provided.');\n\n\t\t/** @type {string} */\n\t\tthis.question = data.question;\n\t\t/** @type {number} */\n\t\tthis.hintsGiven = 0;\n\n\t\tif (/#.+#/.test(data.answer)) {\n\t\t\tthis.answerString = data.answer.match(/#(.+)#/)[1];\n\t\t\tthis.hintString = data.answer.replace(/#/g, '');\n\t\t} else {\n\t\t\tthis.answerString = this.hintString = data.answer;\n\t\t}\n\n\t\tif (data.regexp !== undefined) {\n\t\t\tthis.answerRegexp = new RegExp(data.regexp, 'i');\n\t\t} else {\n\t\t\tthis.answerRegexp = new RegExp(this.answerString, 'i');\n\t\t}\n\n\t\t/** @type {object[]} */\n\t\tthis.hintArray = knuthShuffle(this.hintString.split('').map(\n\t\t\t(character, index) => ({ index, character })\n\t\t));\n\n\t\t/** @type {string} */\n\t\tthis.hintPlaceholder = '.'.repeat(this.hintArray.length);\n\t}\n\n\t/**\n\t * @returns {void}\n\t */\n\taddHint() {\n\t\tlet hint = this.hintArray.pop();\n\n\t\tthis.hintPlaceholder =\n\t\t\tthis.hintPlaceholder.substring(0, hint.index) +\n\t\t\thint.character +\n\t\t\tthis.hintPlaceholder.substring(hint.index + 1);\n\n\t\tthis.hintsGiven++;\n\t}\n\n\t/**\n\t * @param {string} guess\n \t * @returns {void}\n\t */\n\tcheckGuess(guess) {\n\t\treturn this.answerRegexp.test(guess);\n\t}\n};\n",
+    "static": true,
+    "longname": "/home/fkm/Development/GitHub/rx-irc/bot-quiz/lib/quiz-question.js",
+    "access": "public",
+    "description": null,
+    "lineNumber": 1
+  },
+  {
+    "__docId__": 154,
+    "kind": "variable",
+    "name": "knuthShuffle",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-question.js",
+    "static": true,
+    "longname": "rx-irc/bot-quiz/lib/quiz-question.js~knuthShuffle",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-quiz/lib/quiz-question.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 4,
+    "undocument": true
+  },
+  {
+    "__docId__": 155,
+    "kind": "class",
+    "name": "QuizQuestion",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-question.js",
+    "static": true,
+    "longname": "rx-irc/bot-quiz/lib/quiz-question.js~QuizQuestion",
+    "access": "public",
+    "export": true,
+    "importPath": "@rx-irc/bot/rx-irc/bot-quiz/lib/quiz-question.js",
+    "importStyle": "QuizQuestion",
+    "description": null,
+    "lineNumber": 6,
+    "undocument": true,
+    "interface": false
+  },
+  {
+    "__docId__": 156,
+    "kind": "constructor",
+    "name": "constructor",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-question.js~QuizQuestion",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-question.js~QuizQuestion#constructor",
+    "access": "public",
+    "description": "",
+    "lineNumber": 11,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "object"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "data",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 157,
+    "kind": "member",
+    "name": "question",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-question.js~QuizQuestion",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-question.js~QuizQuestion#question",
+    "access": "public",
+    "description": null,
+    "lineNumber": 16,
+    "type": {
+      "nullable": null,
+      "types": [
+        "string"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 158,
+    "kind": "member",
+    "name": "hintsGiven",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-question.js~QuizQuestion",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-question.js~QuizQuestion#hintsGiven",
+    "access": "public",
+    "description": null,
+    "lineNumber": 18,
+    "type": {
+      "nullable": null,
+      "types": [
+        "number"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 159,
+    "kind": "member",
+    "name": "answerString",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-question.js~QuizQuestion",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-question.js~QuizQuestion#answerString",
+    "access": "public",
+    "description": null,
+    "lineNumber": 21,
+    "undocument": true
+  },
+  {
+    "__docId__": 160,
+    "kind": "member",
+    "name": "hintString",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-question.js~QuizQuestion",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-question.js~QuizQuestion#hintString",
+    "access": "public",
+    "description": null,
+    "lineNumber": 22,
+    "undocument": true
+  },
+  {
+    "__docId__": 162,
+    "kind": "member",
+    "name": "answerRegexp",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-question.js~QuizQuestion",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-question.js~QuizQuestion#answerRegexp",
+    "access": "public",
+    "description": null,
+    "lineNumber": 28,
+    "undocument": true
+  },
+  {
+    "__docId__": 164,
+    "kind": "member",
+    "name": "hintArray",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-question.js~QuizQuestion",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-question.js~QuizQuestion#hintArray",
+    "access": "public",
+    "description": null,
+    "lineNumber": 34,
+    "type": {
+      "nullable": null,
+      "types": [
+        "object[]"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 165,
+    "kind": "member",
+    "name": "hintPlaceholder",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-question.js~QuizQuestion",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-question.js~QuizQuestion#hintPlaceholder",
+    "access": "public",
+    "description": null,
+    "lineNumber": 39,
+    "type": {
+      "nullable": null,
+      "types": [
+        "string"
+      ],
+      "spread": false,
+      "description": null
+    }
+  },
+  {
+    "__docId__": 166,
+    "kind": "method",
+    "name": "addHint",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-question.js~QuizQuestion",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-question.js~QuizQuestion#addHint",
+    "access": "public",
+    "description": "",
+    "lineNumber": 45,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 168,
+    "kind": "method",
+    "name": "checkGuess",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-question.js~QuizQuestion",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-question.js~QuizQuestion#checkGuess",
+    "access": "public",
+    "description": "",
+    "lineNumber": 60,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "guess",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 169,
+    "kind": "file",
+    "name": "rx-irc/bot-quiz/lib/quiz-questions.js",
+    "content": "// NPM Dependencies\nconst assert = require('assert');\nconst { knuthShuffle } = require('knuth-shuffle');\n\n// Local Dependencies\nconst convertQuestions = require('./convert-questions');\n\n/**\n * @param {string} filename\n * @returns {object[]}\n */\nfunction getQuestions(filename) {\n\tlet questions = Array.from(convertQuestions(filename));\n\treturn knuthShuffle(questions);\n}\n\nmodule.exports = class QuizQuestions {\n\t/**\n \t * @returns {void}\n\t */\n\tconstructor() {\n\t\tthis.total = 0;\n\t\tthis.remaining = [];\n\t\tthis.current = [];\n\t\tthis.currentLimit = 0;\n\t\tthis.filename = [];\n\t}\n\n\t/**\n\t * @param {string} filename\n\t * @param {number} [limit=10]\n \t * @returns {void}\n\t */\n\tload(filename, limit = 10) {\n\t\tif (this.filename !== filename) {\n\t\t\tthis.filename = filename;\n\t\t\tthis.remaining = getQuestions(filename);\n\t\t\tthis.total = this.remaining.length;\n\t\t} else if (this.remaining.length < limit) {\n\t\t\tthis.remaining = getQuestions(filename);\n\t\t} else {\n\t\t\tthis.remaining = this.remaining.concat(this.current);\n\t\t}\n\t\tthis.current = this.remaining.splice(0, limit);\n\t\tthis.currentLimit = limit;\n\t}\n\n\t/**\n \t * @returns {void}\n\t */\n\tpop() {\n\t\treturn this.current.pop();\n\t}\n};\n",
+    "static": true,
+    "longname": "/home/fkm/Development/GitHub/rx-irc/bot-quiz/lib/quiz-questions.js",
+    "access": "public",
+    "description": null,
+    "lineNumber": 1
+  },
+  {
+    "__docId__": 170,
+    "kind": "variable",
+    "name": "knuthShuffle",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-questions.js",
+    "static": true,
+    "longname": "rx-irc/bot-quiz/lib/quiz-questions.js~knuthShuffle",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-quiz/lib/quiz-questions.js",
+    "importStyle": null,
+    "description": null,
+    "lineNumber": 4,
+    "undocument": true
+  },
+  {
+    "__docId__": 171,
+    "kind": "function",
+    "name": "getQuestions",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-questions.js",
+    "generator": false,
+    "async": false,
+    "static": true,
+    "longname": "rx-irc/bot-quiz/lib/quiz-questions.js~getQuestions",
+    "access": "public",
+    "export": false,
+    "importPath": "@rx-irc/bot/rx-irc/bot-quiz/lib/quiz-questions.js",
+    "importStyle": null,
+    "description": "",
+    "lineNumber": 13,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{object[]}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "filename",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "object[]"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 172,
+    "kind": "class",
+    "name": "QuizQuestions",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-questions.js",
+    "static": true,
+    "longname": "rx-irc/bot-quiz/lib/quiz-questions.js~QuizQuestions",
+    "access": "public",
+    "export": true,
+    "importPath": "@rx-irc/bot/rx-irc/bot-quiz/lib/quiz-questions.js",
+    "importStyle": "QuizQuestions",
+    "description": null,
+    "lineNumber": 18,
+    "undocument": true,
+    "interface": false
+  },
+  {
+    "__docId__": 173,
+    "kind": "constructor",
+    "name": "constructor",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-questions.js~QuizQuestions",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-questions.js~QuizQuestions#constructor",
+    "access": "public",
+    "description": "",
+    "lineNumber": 22,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 174,
+    "kind": "member",
+    "name": "total",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-questions.js~QuizQuestions",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-questions.js~QuizQuestions#total",
+    "access": "public",
+    "description": null,
+    "lineNumber": 23,
+    "undocument": true
+  },
+  {
+    "__docId__": 175,
+    "kind": "member",
+    "name": "remaining",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-questions.js~QuizQuestions",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-questions.js~QuizQuestions#remaining",
+    "access": "public",
+    "description": null,
+    "lineNumber": 24,
+    "undocument": true
+  },
+  {
+    "__docId__": 176,
+    "kind": "member",
+    "name": "current",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-questions.js~QuizQuestions",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-questions.js~QuizQuestions#current",
+    "access": "public",
+    "description": null,
+    "lineNumber": 25,
+    "undocument": true
+  },
+  {
+    "__docId__": 177,
+    "kind": "member",
+    "name": "currentLimit",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-questions.js~QuizQuestions",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-questions.js~QuizQuestions#currentLimit",
+    "access": "public",
+    "description": null,
+    "lineNumber": 26,
+    "undocument": true
+  },
+  {
+    "__docId__": 178,
+    "kind": "member",
+    "name": "filename",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-questions.js~QuizQuestions",
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-questions.js~QuizQuestions#filename",
+    "access": "public",
+    "description": null,
+    "lineNumber": 27,
+    "undocument": true
+  },
+  {
+    "__docId__": 179,
+    "kind": "method",
+    "name": "load",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-questions.js~QuizQuestions",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-questions.js~QuizQuestions#load",
+    "access": "public",
+    "description": "",
+    "lineNumber": 35,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "string"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "filename",
+        "description": ""
+      },
+      {
+        "nullable": null,
+        "types": [
+          "number"
+        ],
+        "spread": false,
+        "optional": true,
+        "defaultValue": "10",
+        "defaultRaw": 10,
+        "name": "limit",
+        "description": ""
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "__docId__": 187,
+    "kind": "method",
+    "name": "pop",
+    "memberof": "rx-irc/bot-quiz/lib/quiz-questions.js~QuizQuestions",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "rx-irc/bot-quiz/lib/quiz-questions.js~QuizQuestions#pop",
+    "access": "public",
+    "description": "",
+    "lineNumber": 52,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{void}"
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "void"
+      ],
+      "spread": false,
+      "description": ""
+    }
+  },
+  {
+    "kind": "manualIndex",
+    "globalIndex": true,
+    "content": "# RxBot\n\n## Installation\n1. Clone the [main RxBot repository](https://github.com/fkm/rx-irc-bot).\n2. Adjust the **package.json** and **config.json** files according to your needs.\n3. Install the dependencies with `npm install`.\n4. Run the bot with `npm start`.\n\n## Logging\nThe scope for the `DEBUG` environment variable is `rx-irc:bot`.\n",
+    "longname": "/home/fkm/Development/GitHub/rx-irc/bot/doc/index.md",
+    "name": "/home/fkm/Development/GitHub/rx-irc/bot/doc/index.md",
+    "static": true,
+    "access": "public"
+  },
+  {
+    "kind": "manualAsset",
+    "longname": "/home/fkm/Development/GitHub/rx-irc/bot/doc/assets",
+    "name": "/home/fkm/Development/GitHub/rx-irc/bot/doc/assets",
+    "static": true,
+    "access": "public"
+  },
+  {
+    "kind": "manual",
+    "longname": "/home/fkm/Development/GitHub/rx-irc/bot/node_modules/@rx-irc/bot-quiz/doc/rxbot-quiz.md",
+    "name": "/home/fkm/Development/GitHub/rx-irc/bot/node_modules/@rx-irc/bot-quiz/doc/rxbot-quiz.md",
+    "content": "# RxBot Trivia\n* [Repository](https://github.com/rx-irc/bot-quiz)\n\n## Commands\n* `play`\n* `quit`\n* `revolt`\n* `score`\n* `help (<topic>)`\n\n### Brackets\n* Angle brackets indicate variable parts of the commands.\n* Round brackets indicate optional parameters.\n\n## Logging\nThe scope for the `DEBUG` environment variable is `rx-irc:bot:quiz`.\n",
+    "static": true,
+    "access": "public"
+  },
+  {
+    "kind": "manual",
+    "longname": "/home/fkm/Development/GitHub/rx-irc/bot/node_modules/@rx-irc/bot-lastfm/doc/rxbot-lastfm.md",
+    "name": "/home/fkm/Development/GitHub/rx-irc/bot/node_modules/@rx-irc/bot-lastfm/doc/rxbot-lastfm.md",
+    "content": "# RxBot Last.fm\n* [Repository](https://github.com/rx-irc/bot-lastfm)\n\n## Commands\n* `listen <user>`\n\n### Brackets\n* Angle brackets indicate variable parts of the commands.\n\n## Logging\nThe scope for the `DEBUG` environment variable is `rx-irc:bot:lastfm`.\n",
+    "static": true,
+    "access": "public"
+  },
+  {
+    "kind": "manual",
+    "longname": "/home/fkm/Development/GitHub/rx-irc/bot/node_modules/@rx-irc/bot-fun/doc/rxbot-fun.md",
+    "name": "/home/fkm/Development/GitHub/rx-irc/bot/node_modules/@rx-irc/bot-fun/doc/rxbot-fun.md",
+    "content": "# RxBot Fun\n* [Repository](https://github.com/rx-irc/bot-fun)\n\n## Commands\n* `figlet ([<font>]) <message>`\n* `cowsay ([<font>]) <message>`\n* `fortune`\n* `fortunesay`\n* `roll (<dices>)`\n\n### Brackets\n* Angle brackets indicate variable parts of the commands.\n* Round brackets indicate optional parameters.\n* Square brackets are to be written as-is.\n\n## Logging\nThe scope for the `DEBUG` environment variable is `rx-irc:bot:fun`.\n",
+    "static": true,
+    "access": "public"
+  },
+  {
+    "kind": "manual",
+    "longname": "/home/fkm/Development/GitHub/rx-irc/bot/node_modules/@rx-irc/bot-admin/doc/rxbot-admin.md",
+    "name": "/home/fkm/Development/GitHub/rx-irc/bot/node_modules/@rx-irc/bot-admin/doc/rxbot-admin.md",
+    "content": "# RxBox Admin\nThe admin module gives remote access to some administrative tasks via private messages.\n\n* [Repository](https://github.com/rx-irc/bot-admin)\n\n## Commands\n* `join <channel>`\n* `part <channel>`\n* `mode <channel/nick> <modes> (<options>)`\n* `topic <channel> <text>`\n* `kick <channel> <nick> (<reason>)`\n* `nick <newnick>`\n* `giveOps <channel> <nick ...>`\n* `takeOps <channel> <nick ...>`\n* `giveHops <channel> <nick ...>`\n* `takeHops <channel> <nick ...>`\n* `giveVoices <channel> <nick ...>`\n* `takeVoices <channel> <nick ...>`\n* `tell <channel/nick> <text>`\n* `notify <channel/nick> <text>`\n\n### Brackets\n* Angle brackets indicate variable parts of the commands.\n* Round brackets indicate optional parameters.\n\n## Logging\nThe scope for the `DEBUG` environment variable is `rx-irc:bot:admin`.\n",
+    "static": true,
+    "access": "public"
+  },
+  {
+    "kind": "manual",
+    "longname": "/home/fkm/Development/GitHub/rx-irc/bot/node_modules/@rx-irc/bot-aare/doc/rxbot-aare.md",
+    "name": "/home/fkm/Development/GitHub/rx-irc/bot/node_modules/@rx-irc/bot-aare/doc/rxbot-aare.md",
+    "content": "# RxBot Aare\n* [Repository](https://github.com/rx-irc/bot-aare)\n\n## Commands\n* `aare`\n\n## Logging\nThe scope for the `DEBUG` environment variable is `rx-irc:bot:aare`.\n",
+    "static": true,
+    "access": "public"
+  },
+  {
+    "kind": "manual",
+    "longname": "/home/fkm/Development/GitHub/rx-irc/bot/node_modules/@rx-irc/bot-1337/doc/rxbot-1337.md",
+    "name": "/home/fkm/Development/GitHub/rx-irc/bot/node_modules/@rx-irc/bot-1337/doc/rxbot-1337.md",
+    "content": "# RxBot 13:37\n* [Repository](https://github.com/rx-irc/bot-1337)\n\n## Logging\nThe scope for the `DEBUG` environment variable is `rx-irc:bot:1337`.\n",
+    "static": true,
+    "access": "public"
+  }
+]

@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <base data-ice="baseUrl" href="../../../../">
+  <title data-ice="title">rx-irc/bot-quiz/lib/quiz-game.js | @rx-irc/bot</title>
+  <link type="text/css" rel="stylesheet" href="css/style.css">
+  <link type="text/css" rel="stylesheet" href="css/prettify-tomorrow.css">
+  <script src="script/prettify/prettify.js"></script>
+  <script src="script/manual.js"></script>
+<meta name="description" content="A Node.js IRC bot framework based on RxJS streams."><meta property="twitter:card" content="summary"><meta property="twitter:title" content="@rx-irc/bot"><meta property="twitter:description" content="A Node.js IRC bot framework based on RxJS streams."></head>
+<body class="layout-container" data-ice="rootContainer">
+
+<header>
+  <a href="./" style="display: flex; align-items: center;"><img src="./image/brand_logo.png" style="width: 20px; height: 20px;"></a>
+  
+  <a href="identifiers.html">Reference</a>
+  <a href="source.html">Source</a>
+  
+  <div class="search-box">
+  <span>
+    <img src="./image/search.png">
+    <span class="search-input-edge"></span><input class="search-input"><span class="search-input-edge"></span>
+  </span>
+    <ul class="search-result"></ul>
+  </div>
+<a style="position:relative; top:3px;" href="https://github.com/rx-irc/bot"><img width="20px" src="./image/github.png"></a></header>
+
+<nav class="navigation" data-ice="nav"><div>
+  <ul>
+    
+  <li data-ice="doc"><a data-ice="dirPath" class="nav-dir-path" href="identifiers.html#bot-1337-lib">bot-1337/lib</a><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/rx-irc/bot-1337/lib/module.js~LeetModule.html">LeetModule</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-defaults">defaults</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-interval">interval</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-version">version</a></span></span></li>
+<li data-ice="doc"><a data-ice="dirPath" class="nav-dir-path" href="identifiers.html#bot-aare-lib">bot-aare/lib</a><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/rx-irc/bot-aare/lib/module.js~AareModule.html">AareModule</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-AARE_API_URL">AARE_API_URL</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-AARE_ORIGIN_URL">AARE_ORIGIN_URL</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-AARE_RIVER_NAME">AARE_RIVER_NAME</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-defaults">defaults</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-filter">filter</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-version">version</a></span></span></li>
+<li data-ice="doc"><a data-ice="dirPath" class="nav-dir-path" href="identifiers.html#bot-admin-lib">bot-admin/lib</a><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/rx-irc/bot-admin/lib/module.js~AdminModule.html">AdminModule</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-REGEXP_JOIN">REGEXP_JOIN</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-REGEXP_KICK">REGEXP_KICK</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-REGEXP_MODE">REGEXP_MODE</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-REGEXP_NICK">REGEXP_NICK</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-REGEXP_PART">REGEXP_PART</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-REGEXP_PRIVS">REGEXP_PRIVS</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-REGEXP_TALK">REGEXP_TALK</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-REGEXP_TOPIC">REGEXP_TOPIC</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-defaults">defaults</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-filter">filter</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-version">version</a></span></span></li>
+<li data-ice="doc"><a data-ice="dirPath" class="nav-dir-path" href="identifiers.html#bot-fun-lib">bot-fun/lib</a><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/rx-irc/bot-fun/lib/module.js~FunModule.html">FunModule</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-defaults">defaults</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-filter">filter</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-spawn">spawn</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-version">version</a></span></span></li>
+<li data-ice="doc"><a data-ice="dirPath" class="nav-dir-path" href="identifiers.html#bot-quiz-lib">bot-quiz/lib</a><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/rx-irc/bot-quiz/lib/module.js~QuizModule.html">QuizModule</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/rx-irc/bot-quiz/lib/quiz-game.js~QuizGame.html">QuizGame</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/rx-irc/bot-quiz/lib/quiz-help.js~QuizHelp.html">QuizHelp</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/rx-irc/bot-quiz/lib/quiz-players.js~QuizPlayers.html">QuizPlayers</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/rx-irc/bot-quiz/lib/quiz-question.js~QuizQuestion.html">QuizQuestion</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/rx-irc/bot-quiz/lib/quiz-questions.js~QuizQuestions.html">QuizQuestions</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-function">F</span><span data-ice="name"><span><a href="function/index.html#static-function-convertQuestions">convertQuestions</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-function">F</span><span data-ice="name"><span><a href="function/index.html#static-function-readFile">readFile</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-function">F</span><span data-ice="name"><span><a href="function/index.html#static-function-getQuestions">getQuestions</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-HEADING_END">HEADING_END</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-defaults">defaults</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-filter">filter</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-merge">merge</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-version">version</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-defaults">defaults</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-defaults">defaults</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-knuthShuffle">knuthShuffle</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-knuthShuffle">knuthShuffle</a></span></span></li>
+<li data-ice="doc"><a data-ice="dirPath" class="nav-dir-path" href="identifiers.html#bot-app">bot/app</a><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/rx-irc/bot/app/client-wrapper.js~ClientWrapper.html">ClientWrapper</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-defaults">defaults</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-fromEvent">fromEvent</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-takeUntil">takeUntil</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-client">client</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-external">E</span><span data-ice="name"><span><a href="https://www.npmjs.com/package/irc">Client</a></span></span></li>
+</ul>
+</div>
+</nav>
+
+<div class="content" data-ice="content"><h1 data-ice="title">rx-irc/bot-quiz/lib/quiz-game.js</h1>
+<pre class="source-code line-number raw-source-code"><code class="prettyprint linenums" data-ice="content">// NPM Dependencies
+const assert = require(&apos;assert&apos;);
+const colors = require(&apos;irc-colors&apos;);
+
+// Local Dependencies
+const QuizPlayers = require(&apos;./quiz-players&apos;);
+const QuizQuestion = require(&apos;./quiz-question&apos;);
+const QuizQuestions = require(&apos;./quiz-questions&apos;);
+const QuizHelp = require(&apos;./quiz-help&apos;);
+
+/**
+ * @type {Object}
+ * @property {string} prefix=&apos;[Qz]&apos;
+ * @property {number} startDelay=10000
+ * @property {number} questionDelay=5000
+ * @property {number} hintInterval=5000
+ * @property {boolean} moderated=true
+ * @property {boolean} hintsUseCache=false
+ * @property {string} logLevel=&apos;error&apos;
+ */
+let defaults = {
+	prefix: &apos;[Qz]&apos;,
+	startDelay: 10000,
+	questionDelay: 5000,
+	hintInterval: 5000,
+	moderated: true,
+	hintsUseCache: false,
+	logLevel: &apos;error&apos;,
+};
+
+module.exports = class QuizGame {
+	/**
+	 * @param {Client} client
+	 * @param {object} options
+ 	 * @returns {void}
+	 */
+	constructor(client, options) {
+		assert.strictEqual(typeof options.channel, &apos;string&apos;);
+
+		/** @type {Client} */
+		this.client = client;
+		/** @type {object} */
+		this.settings = { ...defaults, ...options };
+
+		/** @type {QuizPlayers} */
+		this.players = new QuizPlayers();
+		/** @type {QuizQuestions} */
+		this.questions = new QuizQuestions();
+		/** @type {QuizHelp} */
+		this.help = new QuizHelp({ useCache: this.settings.hintsUseCache });
+
+		/** @type {boolean} */
+		this.gameActive = false;
+		/** @type {number} */
+		this.startTimeoutId = null;
+		/** @type {QuizQuestion} */
+		this.currentChallenge = null;
+		/** @type {number} */
+		this.challengeTimeoutId = null;
+		/** @type {number} */
+		this.hintIntervalId = null;
+	}
+
+	/**
+	 * @param {string} nick
+ 	 * @returns {void}
+	 */
+	addPlayer(nick) {
+		if (!this.players.isPlayer(nick)) {
+			if (this.gameActive) {
+				this.notify(nick, `Game is already running.`);
+			} else {
+				if (this.settings.moderated) {
+					this.sendModes(this.settings.channel, &apos;+v&apos;, nick);
+				}
+
+				this.tellToChannel(`Player ${nick} has joined the game.`);
+				this.players.addPlayer(nick);
+
+				if (this.players.nickList.length === 2) {
+					this.tellToChannel(&apos;Enough players found for new game.&apos;);
+					this.beginGame();
+				} else if (this.players.nickList.length &gt; 2) {
+					this.tellToChannel(&apos;Additional player joined the game.&apos;);
+					this.beginGame();
+				}
+			}
+		}
+	}
+
+	/**
+	 * @param {string} nick
+	 * @returns {void}
+	 */
+	removePlayer(nick) {
+		if (this.players.isPlayer(nick)) {
+			if (this.settings.moderated) {
+				this.sendModes(this.settings.channel, &apos;-v&apos;, nick);
+			}
+
+			this.tellToChannel(`Player ${nick} has quit the game.`);
+			this.players.removePlayer(nick);
+
+			if (this.players.nickList.length === 1) {
+				clearTimeout(this.startTimeoutId);
+
+				if (this.gameActive) {
+					this.finishChallenge();
+					this.endGame(`Last man standing.`);
+				}
+			}
+		}
+	}
+
+	/**
+	 * @param {string} oldnick
+	 * @param {string} newnick
+	 * @returns {void}
+	 */
+	updatePlayer(oldnick, newnick) {
+		if (this.players.isPlayer(oldnick)) {
+			this.players.updatePlayer(oldnick, newnick);
+		}
+	}
+
+	/**
+	 * @returns {void}
+	 */
+	beginGame() {
+		this.tellToChannel(`Game starting in ${this.settings.startDelay / 1000} seconds.`);
+
+		clearTimeout(this.startTimeoutId);
+		this.startTimeoutId = setTimeout(() =&gt; {
+			let title = colors.inverse(` GAME STARTS `);
+
+			this.gameActive = true;
+
+			this.questions.load(&apos;de-quake&apos;, 10);
+
+			if (this.settings.moderated) {
+				this.sendModes(this.settings.channel, &apos;+m&apos;);
+			}
+
+			this.tellToChannel(title);
+			this.tellToChannel(
+				&apos;Total questions: &apos; + this.questions.total + &apos;; &apos; +
+				&apos;Using: &apos; + this.questions.current.length + &apos;; &apos; +
+				&apos;Remaining: &apos; + this.questions.remaining.length
+			);
+			this.tellToChannel(&apos;Players: &apos; + this.players.nickList.join(&apos;, &apos;));
+
+			this.nextChallenge();
+		}, this.settings.startDelay);
+	}
+
+	/**
+	 * @param {string} reason
+	 * @returns {void}
+	 */
+	endGame(reason) {
+		let title = colors.inverse(` GAME OVER `);
+
+		clearTimeout(this.startTimeoutId);
+		clearInterval(this.hintIntervalId);
+
+		if (this.gameActive) {
+			this.tellToChannel(`${title} ${reason}`);
+
+			this.tellScore();
+			this.gameActive = false;
+
+			this.tellToChannel(`Thank you for playing.`);
+
+			if (this.settings.moderated) {
+				this.sendModes(this.settings.channel, &apos;-m&apos;);
+
+				this.players.nickList.forEach(nick =&gt; {
+					this.sendModes(this.settings.channel, &apos;-v&apos;, nick);
+				});
+			}
+
+			this.players.removeAllPlayers();
+		}
+	}
+
+	//   ____ _           _ _
+	//  / ___| |__   __ _| | | ___ _ __   __ _  ___
+	// | |   | &apos;_ \ / _` | | |/ _ \ &apos;_ \ / _` |/ _ \
+	// | |___| | | | (_| | | |  __/ | | | (_| |  __/
+	//  \____|_| |_|\__,_|_|_|\___|_| |_|\__, |\___|
+	//                                   |___/
+	//
+
+	/**
+	 * @returns {void}
+	 */
+	nextChallenge() {
+		if (this.gameActive) {
+			if (this.currentChallenge !== null) {
+				// Finish current challenge first.
+			} else if (this.challengeTimeoutId !== null) {
+				// Next challenge already initialized.
+			} else if (this.questions.current.length === 0) {
+				this.endGame(`No more questions.`);
+			} else {
+				this.challengeTimeoutId = setTimeout(() =&gt; {
+					let title = colors.inverse(` NEW QUESTION `);
+
+					this.challengeTimeoutId = null;
+
+					this.currentChallenge = new QuizQuestion(this.questions.pop());
+
+					this.tellToChannel(`${title} ${this.questions.currentLimit - this.questions.current.length} / ${this.questions.currentLimit}`);
+					this.tellToChannel(this.currentChallenge.question);
+					this.tellToChannel(this.currentChallenge.hintPlaceholder);
+
+					clearInterval(this.hintIntervalId);
+					this.hintIntervalId = setInterval(
+						() =&gt; this.giveHint(),
+						this.settings.hintInterval
+					);
+				}, this.settings.questionDelay);
+			}
+		}
+	}
+
+	/**
+	 * @param {string} winner
+	 * @returns {void}
+	 */
+	finishChallenge(winner) {
+		let title = colors.inverse(` QUESTION END `);
+
+		clearInterval(this.hintIntervalId);
+
+		this.players.resetRevoltees();
+
+		let message;
+
+		if (winner) {
+			this.players.increaseScore(winner);
+			message = `${winner} had the correct answer!`;
+		} else {
+			message = `The question went unanswered.`;
+		}
+
+		this.tellToChannel(`${title} ${message}`);
+		this.tellToChannel(`Question: ${this.currentChallenge.question}`);
+		this.tellToChannel(`Answer: ${this.currentChallenge.hintString}`);
+
+		this.tellScore();
+
+		this.currentChallenge = null;
+	}
+
+	/**
+	 * @param {string} nick
+	 * @returns {void}
+	 */
+	handleRevolt(nick) {
+		if (this.currentChallenge !== null) {
+			if (this.players.isRevolting(nick)) {
+				this.notify(nick, `You are already revolting.`);
+			} else if (this.currentChallenge.hintsGiven &lt; 1) {
+				this.tellToChannel(`Revolting is only possible after the first hint.`);
+			} else {
+				this.players.setRevoltee(nick);
+				this.tellToChannel(`${nick} is revolting!`);
+
+				if (this.players.getRevoltees().length &gt; this.players.nickList.length / 2) {
+					this.tellToChannel(`Revolt successful. The quiz master gives in.`);
+					this.finishChallenge();
+					this.nextChallenge();
+				} else {
+					this.tellToChannel(`The mob is negligible. The quiz master is not impressed.`)
+				}
+			}
+		}
+	}
+
+	/**
+	 * @param {string} nick
+	 * @param {string} guess
+	 * @returns {void}
+	 */
+	handleGuess(nick, guess) {
+		if (this.currentChallenge !== null) {
+			if (this.currentChallenge.checkGuess(guess)) {
+				this.finishChallenge(nick);
+				this.nextChallenge();
+			}
+		}
+	}
+
+	/**
+	 * @returns {void}
+	 */
+	giveHint() {
+		if (this.currentChallenge === null) {
+
+		} else if (this.currentChallenge.hintArray.length &lt; 2) {
+			this.finishChallenge();
+			this.nextChallenge();
+		} else {
+			this.currentChallenge.addHint();
+			this.tellToChannel(this.currentChallenge.question);
+			this.tellToChannel(this.currentChallenge.hintPlaceholder);
+		}
+	}
+
+	//  _____     _ _
+	// |_   _|_ _| | | __
+	//   | |/ _` | | |/ /
+	//   | | (_| | |   &lt;
+	//   |_|\__,_|_|_|\_\
+	//
+
+	/**
+	 * @returns {void}
+	 */
+	sendModes() {
+		let args = Array.from(arguments);
+		args.unshift(&apos;MODE&apos;);
+
+		this.client.lib.send.apply(this.client.lib, args);
+	}
+
+	/**
+	 * @param {string} message
+	 * @returns {void}
+	 */
+	tellToChannel(message) {
+		this.client.tell(this.settings.channel, message, this.settings.prefix);
+	}
+
+	/**
+	* @param {string} target
+	* @param {string} message
+	 * @returns {void}
+	 */
+	notify(target, message) {
+		this.client.notify(target, message, this.settings.prefix);
+	}
+
+	/**
+	 * @param {string[]} multiline
+	 * @returns {void}
+	 */
+	tellScore(multiline) {
+		let title = colors.inverse(` SCORE `);
+		let output = [];
+
+		if (this.gameActive) {
+			let ranking = this.players.getRanking().map(player =&gt; {
+				return `${player.position}. ${player.nick} (${player.score})`;
+			});
+
+			if (multiline) {
+				output.push(`${title}`);
+				output.concat(ranking);
+			} else {
+				output.push(`${title} ${ranking.join(&apos;, &apos;)}`);
+			}
+		} else {
+			output.push(`${title} No active game.`);
+		}
+
+		this.tellToChannel(output);
+	}
+
+	/**
+	 * @param {string} target
+	 * @param {string} category
+	 * @returns {void}
+	 */
+	tellHelp(target, category) {
+		this.notify(target, this.help.getArray(category));
+	}
+};
+</code></pre>
+
+</div>
+
+<footer class="footer">
+  Generated by <a href="https://esdoc.org">ESDoc<span data-ice="esdocVersion">(1.1.0)</span><img src="./image/esdoc-logo-mini-black.png"></a>
+</footer>
+
+<script src="script/search_index.js"></script>
+<script src="script/search.js"></script>
+<script src="script/pretty-print.js"></script>
+<script src="script/inherited-summary.js"></script>
+<script src="script/test-summary.js"></script>
+<script src="script/inner-link.js"></script>
+<script src="script/patch-for-local.js"></script>
+</body>
+</html>
