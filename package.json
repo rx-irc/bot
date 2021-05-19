@@ -16,6 +16,7 @@
   },
   "scripts": {
     "start": "node app/start.js",
+    "debug": "node --inspect=0.0.0.0 app/start.js",
     "docs": "node node_modules/esdoc/out/src/ESDocCLI.js"
   },
   "dependencies": {

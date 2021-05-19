@@ -1,0 +1,14 @@
+{
+	"version": "0.2.0",
+	"configurations": [{
+		"name": "watch",
+		"type": "node",
+		"request": "attach",
+		"port": 9229,
+		"address": "localhost",
+		"localRoot": "${workspaceFolder}",
+		"remoteRoot": "/home/rxbot",
+		"protocol": "inspector",
+		"restart": true
+	}]
+}
