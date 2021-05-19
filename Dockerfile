@@ -1,6 +1,9 @@
 FROM node:14-buster
 MAINTAINER Florian Mäder <florian@maederbiel.ch>
 
+# Limit Debian during build.
+ARG DEBIAN_FRONTEND=noninteractive
+
 # Set Node environment.
 ENV NODE_ENV=production
 
@@ -41,7 +44,6 @@ WORKDIR /home/rxbot
 # Copy source code.
 COPY app/ ./app/
 COPY package.json package-lock.json* ./
-COPY config.json .
 
 # Set file permissions.
 RUN chown -R rxbot:rxbot .
@@ -50,6 +52,12 @@ RUN chown -R rxbot:rxbot .
 USER rxbot
 
 # Install dependencies.
-RUN npm ci
+# Development dependencies will not be installed
+# because NODE_ENV is set to production.
+RUN npm install
+
+# Copy the configuration
+# As most builds are because of the configuration, we add it last.
+COPY config.json .
 
 CMD ["npm", "start"]
