@@ -4,9 +4,9 @@
   "version": "2.0.0",
   "license": "MIT",
   "author": "Florian Mäder <florian@maederbiel.ch>",
-  "homepage": "https://fkm.github.io/rx-irc-bot/",
+  "homepage": "https://rx-irc.github.io/bot/",
   "bugs": "https://github.com/rx-irc/bot/issues",
-  "repository": "rx-irc/bot",
+  "repository": "github:rx-irc/bot",
   "main": "app/client-wrapper.js",
   "publishConfig": {
     "access": "public"
