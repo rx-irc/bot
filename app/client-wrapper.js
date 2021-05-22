@@ -13,26 +13,25 @@ const logger = require('./logger');
  * @see https://node-irc.readthedocs.io/en/latest/API.html#client
  *
  * @type {Object}
- * @property {string} defaults.userName='rxbot'
- * @property {string} defaults.realName='ReactiveX&nbsp;IRC&nbsp;bot'
- * @property {string} defaults.localAddress=null
- * @property {boolean} defaults.debug=false
- * @property {boolean} defaults.showErrors=true
- * @property {boolean} defaults.autoRejoin=false
- * @property {boolean} defaults.autoConnect=false
- * @property {boolean} defaults.secure=true
- * @property {boolean} defaults.selfSigned=true
- * @property {boolean} defaults.certExpired=true
- * @property {boolean} defaults.floodProtection=false
- * @property {number} defaults.floodProtectionDelay=1000
- * @property {boolean} defaults.sasl=false
- * @property {number} defaults.retryCount=0
- * @property {number} defaults.retryDelay=2000
- * @property {boolean} defaults.stripColors=true
- * @property {string} defaults.channelPrefixes='&amp;#'
- * @property {number} defaults.messageSplit=512
- * @property {string} defaults.encoding='UTF-8'
- * @property {string} defaults.logLevel='info'
+ * @property {string} userName='rxbot'
+ * @property {string} realName='ReactiveX&nbsp;IRC&nbsp;bot'
+ * @property {string} localAddress=null
+ * @property {boolean} debug=false
+ * @property {boolean} showErrors=true
+ * @property {boolean} autoRejoin=false
+ * @property {boolean} autoConnect=false
+ * @property {boolean} secure=true
+ * @property {boolean} selfSigned=true
+ * @property {boolean} certExpired=true
+ * @property {boolean} floodProtection=false
+ * @property {number} floodProtectionDelay=1000
+ * @property {boolean} sasl=false
+ * @property {number} retryCount=0
+ * @property {number} retryDelay=2000
+ * @property {boolean} stripColors=true
+ * @property {string} channelPrefixes='&amp;#'
+ * @property {number} messageSplit=512
+ * @property {string} encoding='UTF-8'
  */
 let defaults = {
 	userName: 'rxbot',
@@ -117,7 +116,7 @@ class ClientWrapper {
 				command.push(reason);
 			}
 
-			this.lib.send.apply(this.lib, command);
+			this.lib.send(...command);
 		});
 	}
 
@@ -187,7 +186,7 @@ class ClientWrapper {
 			let batch_mode = action + privilege.repeat(batch_nicks.length);
 			let batch_args = ['MODE', channel, batch_mode].concat(batch_nicks);
 
-			this.lib.send.apply(this.lib, batch_args);
+			this.lib.send(...batch_args);
 		}
 	}
 
