@@ -6,7 +6,7 @@ const config = require('../config');
 let client = new ClientWrapper(config.client);
 
 client.connect(() => {
-	logger.info(`Connected to ${config.server}.`);
+	logger.info(`Connected to ${config.client.server}.`);
 
 	config.modules
 		.filter(module => module.enabled !== false)
