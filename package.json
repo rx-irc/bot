@@ -20,6 +20,7 @@
     "docs": "node node_modules/esdoc/out/src/ESDocCLI.js"
   },
   "dependencies": {
+    "@rx-irc/client": "*",
     "@rx-irc/bot-1337": "*",
     "@rx-irc/bot-aare": "*",
     "@rx-irc/bot-admin": "*",
@@ -28,7 +29,6 @@
     "@rx-irc/bot-quiz": "*",
     "assert": "^2.0.0",
     "debug": "^4.3.1",
-    "irc": "matrix-org/node-irc",
     "rxjs": "^6.6.7"
   },
   "devDependencies": {

@@ -1,12 +1,15 @@
 {
   "client": {
-    "server": "95.128.34.190",
+    "host": "irc.div0.ch",
     "port": 6697,
-    "secure": true,
+    "ssl": true,
+    "rejectUnauthorized": true,
 
-    "nick": "rxbot",
-    "channels": [
-      "#rxbot"
+    "nick": "bot",
+    "username": "rxbot",
+    "realname": "ReactiveX IRC bot",
+    "autoJoin": [
+      "#home"
     ]
   },
 
@@ -15,7 +18,9 @@
       "name": "admin",
       "enabled": true,
       "options": {
-        "regexp": "^fkm!~?fkm@"
+        "passwords": {
+          "myNick": "123"
+        }
       }
     },
     {
