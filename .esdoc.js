@@ -50,7 +50,7 @@ module.exports = {
 		{
 			name: 'esdoc-accessor-plugin',
 			option: {
-				access: ['public', 'protected', 'private'],
+				access: ['public'],
 				autoPrivate: true,
 			},
 		},
@@ -73,7 +73,6 @@ module.exports = {
 
 				files,
 
-				// `true` would displace the README.
 				globalIndex: true,
 			},
 		},
