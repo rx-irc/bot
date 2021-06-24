@@ -1,3 +1,20 @@
+# [3.0.0](https://github.com/rx-irc/bot/compare/v2.0.0...v3.0.0) (2021-06-24)
+
+
+### Bug Fixes
+
+* correct config ref in startup logging ([5d7d5da](https://github.com/rx-irc/bot/commit/5d7d5dad9eb1bd771a2f3328bccd32e33c015e2c))
+
+
+### Features
+
+* switch to new client ([facf98b](https://github.com/rx-irc/bot/commit/facf98bb370b8e2f35acb177e3b7adae3229d6f1))
+
+
+### BREAKING CHANGES
+
+* There's no chance this doesn't need action :-D
+
 # [2.0.0](https://github.com/rx-irc/bot/compare/v1.0.0...v2.0.0) (2021-05-17)
 
 
